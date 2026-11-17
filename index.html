@@ -85,6 +85,8 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:14px;font-weight:700;co
 .now-txt b{font-size:17px;font-weight:800}
 .go{appearance:none;flex:none;min-width:92px;min-height:42px;padding:0 14px;border:0;border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:15px}
 .go.wait{background:none;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.ship{margin-top:8px;font-size:15px}
+a{color:var(--ink)}
 .ready{margin-top:6px;font-weight:700;color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:42px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:14px}
 .toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:8;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:616px;margin:0 auto;padding:10px 10px 10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.3)}
@@ -106,14 +108,14 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:14px;font-weight:700;co
 .problem{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bad-tint);color:var(--bad);font-weight:700}
 .item{margin-top:14px}
 .item h3{font-size:16px;font-weight:800}
-.steps{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
-.step{appearance:none;display:inline-flex;flex-direction:column;align-items:flex-start;min-height:46px;padding:7px 12px;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;font-weight:700;font-size:15px}
+.steps{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:8px}
+.step{appearance:none;display:inline-flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:50px;padding:7px 12px;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;font-weight:700;font-size:15px}
 .step small{font-weight:500;font-size:12px;color:var(--soft)}
 .step.wait{border-style:dashed;border-color:var(--soft)}
 .step.done{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .step.done small{color:inherit;opacity:.75}
 .step.done b::before{content:"✓ "}
-.step.now{box-shadow:0 0 0 2px var(--ink)}
+.step.cur{border-color:var(--ink);border-width:2.5px}
 .step.photo{border-color:var(--soft)}
 .step.photo.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
 .step.photo.on small{color:inherit}
@@ -178,7 +180,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-1939';
+const VERSION = '20261117-1943';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -309,7 +311,8 @@ function cardHtml(o) {
   if (done) orderRow = `<p class="ready">✓ Изпратена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Готово');
-  else if (allReady) orderRow = nowRow('Товарителница', 'work', 'waybill', o.id, 'Готово');
+  else if (allReady) orderRow = nowRow('Товарителница', 'work', 'waybill', o.id, 'Готово') +
+    ((o.address || o.phone) ? `<p class="ship">${e([o.customer, o.phone, o.address].filter(Boolean).join(' · '))}</p>` : '<p class="ship muted">Няма въведен адрес. Добави го от „Още“.</p>');
   return `<article class="card ${o.urgent ? 'urgent' : ''}">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}</span><span class="src">${e(src)}</span></div>
@@ -330,7 +333,7 @@ function bodyHtml(o) {
   const items = itemsOf(o).map(it => {
     const st = stagesOf(it);
     const next = st.find(s => !s.done_at);
-    const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'now' : ''}`)).join('');
+    const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'cur' : ''}`)).join('');
     const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
       <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
     return `<div class="item"><h3>${e(itemLabel(it))}</h3><p class="small muted">Докосни етап, за да го отбележиш или върнеш.</p>
@@ -348,6 +351,8 @@ function bodyHtml(o) {
       ${stepBtn('pack', o.id, 'Опаковано', o.packed_at, o.packed_by)}
       ${stepBtn('waybill', o.id, 'Товарителница написана', o.waybill_at, o.waybill_by)}
     </div></div>
+    <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
+    <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" placeholder="Град, адрес или офис на куриер" autocomplete="off">
     <label class="lbl" for="trk-${o.id}">Номер на товарителница</label>
     <input class="field" id="trk-${o.id}" data-field="tracking" data-id="${o.id}" value="${e(o.tracking)}" inputmode="text" autocomplete="off">
     <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
@@ -448,7 +453,7 @@ function render() {
 /* ---------- new order form ---------- */
 const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, custom: false, note: '', stages: [], extra: '' });
 function openForm() {
-  F = { customer: '', phone: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
+  F = { customer: '', phone: '', address: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
   renderForm();
   window.scrollTo(0, 0);
 }
@@ -495,6 +500,7 @@ function renderForm() {
     <div class="sheet-top"><h2>Нова поръчка</h2><button class="link" data-act="f-close">Отказ</button></div>
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
     <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
+    <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" placeholder="Град, адрес или офис на куриер" autocomplete="off">${e(F.address)}</textarea>
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
@@ -529,7 +535,7 @@ async function saveOrder() {
   F.busy = true; F.err = ''; renderForm();
   try {
     await api.createOrder({
-      customer: F.customer.trim(), phone: F.phone.trim(), brand: F.brand, channel: F.channel,
+      customer: F.customer.trim(), phone: F.phone.trim(), address: F.address.trim(), brand: F.brand, channel: F.channel,
       account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
       note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
       items: F.items.map(it => ({
@@ -675,7 +681,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('input', ev => {
   const t = ev.target;
   if (!F) return;
-  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-note': 'note', 'f-due': 'due' };
+  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-note': 'note', 'f-due': 'due' };
   if (map[t.id]) F[map[t.id]] = t.value;
   else if (t.id === 'f-name') F.edit.name = t.value;
   else if (t.id === 'f-inote') F.edit.note = t.value;
