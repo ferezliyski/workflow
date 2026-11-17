@@ -33,7 +33,7 @@ button,input,select,textarea{font:inherit;color:inherit}
 button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 h1,h2,h3,p{margin:0}
-.wrap{max-width:640px;margin:0 auto;padding:14px 14px 120px}
+.wrap{max-width:640px;margin:0 auto;padding:14px 14px 150px}
 .top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
 .top h1{font-size:24px;font-weight:800;letter-spacing:-.01em}
 .top span{font-size:14px;color:var(--soft)}
@@ -110,11 +110,11 @@ td.v{font-weight:800}
 .kv:last-child{border-bottom:0}
 
 /* bottom bar */
-.bar{position:sticky;top:0;z-index:5;display:flex;justify-content:center;background:var(--surface);border-bottom:1.5px solid var(--line)}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;justify-content:center;background:var(--surface);border-top:1.5px solid var(--line);padding-bottom:env(safe-area-inset-bottom)}
 .bar-in{display:flex;width:100%;max-width:640px}
-.tab{appearance:none;flex:1;min-height:52px;padding:6px 2px;background:none;border:0;border-bottom:3px solid transparent;font-size:14px;font-weight:700;color:var(--soft)}
-.tab[aria-current="page"]{color:var(--accent);border-bottom-color:var(--accent)}
-.fab{position:fixed;left:16px;bottom:calc(18px + env(safe-area-inset-bottom));z-index:6;min-height:54px;padding:0 20px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:800;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.tab{appearance:none;flex:1;min-height:56px;padding:6px 2px;background:none;border:0;border-top:3px solid transparent;font-size:13px;font-weight:700;color:var(--soft)}
+.tab[aria-current="page"]{color:var(--accent);border-top-color:var(--accent)}
+.fab{position:fixed;right:16px;bottom:calc(72px + env(safe-area-inset-bottom));z-index:6;min-height:54px;padding:0 20px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:800;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 
 /* new order sheet */
 .sheet{position:fixed;inset:0;z-index:10;overflow-y:auto;background:var(--bg)}
