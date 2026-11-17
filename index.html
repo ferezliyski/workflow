@@ -193,7 +193,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2022';
+const VERSION = '20261117-2027';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -239,7 +239,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [] };
-const UI = { tab: 'orders', filter: 'all', prod: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', prod: 'all', sub: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -415,21 +415,31 @@ function renderPop() {
   box.querySelector('.pop-in').scrollTop = keepY;
 }
 
+// Products can be grouped (all t-shirt models sit under "Тениски")
+const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
+const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
 function filterData() {
   const all = activeOrders();
-  const typeOrder = D.types.map(t => t.name);
+  const rank = n => { const i = D.types.findIndex(t => (t.grp || t.name) === n); return i < 0 ? 99 : i; };
   const prodCounts = {};
-  all.forEach(o => [...new Set(itemsOf(o).map(it => it.name))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
-  const prods = Object.keys(prodCounts).sort((a, b) => (typeOrder.indexOf(a) + 1 || 99) - (typeOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
-  if (UI.prod !== 'all' && !prodCounts[UI.prod]) UI.prod = 'all';
-  const list = UI.prod === 'all' ? all : all.filter(o => itemsOf(o).some(it => it.name === UI.prod));
+  all.forEach(o => [...new Set(itemsOf(o).map(groupOf))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
+  const prods = Object.keys(prodCounts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  if (UI.prod !== 'all' && !prodCounts[UI.prod]) { UI.prod = 'all'; UI.sub = 'all'; }
+  const inGroup = UI.prod === 'all' ? all : all.filter(o => itemsOf(o).some(it => groupOf(it) === UI.prod));
+  // models inside the chosen group (e.g. the t-shirt types)
+  const subCounts = {};
+  if (UI.prod !== 'all') inGroup.forEach(o => [...new Set(itemsOf(o).filter(it => groupOf(it) === UI.prod).map(it => it.name))].forEach(n => { subCounts[n] = (subCounts[n] || 0) + 1; }));
+  const subs = Object.keys(subCounts).sort((a, b) => D.types.findIndex(t => t.name === a) - D.types.findIndex(t => t.name === b));
+  const hasSubs = subs.length > 1 || (subs.length === 1 && subs[0] !== UI.prod);
+  if (UI.sub !== 'all' && !subCounts[UI.sub]) UI.sub = 'all';
+  const list = UI.sub === 'all' ? inGroup : inGroup.filter(o => itemsOf(o).some(it => it.name === UI.sub));
   const counts = {};
   list.forEach(o => orderTags(o).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
   const order = ['Чака клиента', ...D.stageDefs.map(s => s.name), 'На снимане', 'За опаковане', 'За товарителница'];
   const tags = Object.keys(counts).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   if (UI.filter !== 'all' && !counts[UI.filter]) UI.filter = 'all';
   const shown = UI.filter === 'all' ? list : list.filter(o => orderTags(o).includes(UI.filter));
-  return { all, prods, prodCounts, list, tags, counts, shown };
+  return { all, prods, prodCounts, inGroup, subs, subCounts, hasSubs, list, tags, counts, shown };
 }
 
 function filterPopHtml() {
@@ -440,6 +450,8 @@ function filterPopHtml() {
     <div class="card-body">
       <span class="lbl">Продукт</span>
       <div class="chips">${chip('prod', UI.prod, 'all', 'Всички', f.all.length)}${f.prods.map(n => chip('prod', UI.prod, n, n, f.prodCounts[n])).join('')}</div>
+      ${UI.prod !== 'all' && f.hasSubs ? `<span class="lbl">Вид ${e(UI.prod.toLowerCase())}</span>
+      <div class="chips">${chip('sub', UI.sub, 'all', 'Всички', f.inGroup.length)}${f.subs.map(n => chip('sub', UI.sub, n, n, f.subCounts[n])).join('')}</div>` : ''}
       <span class="lbl">Етап</span>
       <div class="chips">${chip('filter', UI.filter, 'all', 'Всички', f.list.length)}${f.tags.map(t => chip('filter', UI.filter, t, t, f.counts[t])).join('')}</div>
       <div class="actions">
@@ -453,7 +465,7 @@ function filterPopHtml() {
 function viewOrders() {
   const f = filterData();
   const active = (UI.prod !== 'all') + (UI.filter !== 'all');
-  const which = [UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
+  const which = [UI.sub !== 'all' ? UI.sub : UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
   return `<div class="top"><h1>Поръчки</h1>
       <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></div>
     ${active ? `<p class="fnow">${e(which)} · ${f.shown.length} от ${f.all.length} <button class="link" data-act="f-clear">Изчисти</button></p>` : ''}
@@ -494,9 +506,9 @@ function viewSummary() {
   const otherHtml = Object.keys(other).map(n => `<section class="block"><h2><span>${e(n)}</span></h2>
     ${Object.keys(other[n]).map(l => `<div class="kv"><span>${e(l)}</span><b>${other[n][l]} бр.</b></div>`).join('')}</section>`).join('');
   const seg = (v, l) => `<button class="chip" data-act="sum-mode" data-v="${v}" aria-pressed="${mode === v}">${l}</button>`;
-  return `<div class="top"><h1>За правене</h1><span>${tees.reduce((a, t) => a + t.qty, 0)} тениски</span></div>
+  return `<div class="top"><h1>За правене</h1><span>${tees.reduce((a, t) => a + t.qty, 0)} бр. с размер</span></div>
     <div class="seg">${seg('all', 'Общо')}${seg('print', 'За печат')}${seg('press', 'За щамповане')}</div>
-    ${blocks || '<p class="empty">Няма тениски за този етап.</p>'}
+    ${blocks || '<p class="empty">Няма тениски и худита за този етап.</p>'}
     ${otherHtml ? `<h2 style="margin:18px 0 10px;font-size:16px">Други продукти</h2>${otherHtml}` : ''}`;
 }
 
@@ -697,12 +709,13 @@ document.addEventListener('click', async ev => {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
     case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
-    case 'prod': UI.prod = v; UI.filter = 'all'; return render();
+    case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
+    case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
-    case 'f-clear': UI.prod = 'all'; UI.filter = 'all'; return render();
+    case 'f-clear': UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
     case 'logout': await api.signOut(); me = null; return render();
     case 'stage': {
