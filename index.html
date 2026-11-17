@@ -17,6 +17,7 @@
   --accent:#CB2B32; --on-accent:#FFFFFF; --tint:#EDEBE7;
   --band:#1A1A1A; --on-band:#F7F5F1;
   --bad:#B3222A; --bad-tint:#F9E3E3;
+  --next:#2E9A55; --photo:#C99A06;
   --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
   color-scheme:light;
 }
@@ -26,6 +27,7 @@
     --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
     --band:#ECE9E4; --on-band:#151515;
     --bad:#F58388; --bad-tint:#3A1B1C;
+    --next:#4CC174; --photo:#F2C230;
     color-scheme:dark;
   }
 }
@@ -121,9 +123,9 @@ a{color:var(--ink)}
 .step.done{background:var(--ink);border-color:var(--ink);color:var(--bg)}
 .step.done small{color:inherit;opacity:.75}
 .step.done b::before{content:"✓ "}
-.step.cur{border-color:var(--ink);border-width:2.5px}
-.step.photo{border-color:var(--soft)}
-.step.photo.on{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.step.cur{border-color:var(--next)}
+.step.photo{border-style:dashed;border-color:var(--photo)}
+.step.photo.on{border-style:dashed;background:none;border-color:var(--photo);color:var(--photo)}
 .step.photo.on small{color:inherit}
 .sep{margin:16px 0 0;padding-top:12px;border-top:1.5px dashed var(--line)}
 .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
@@ -187,7 +189,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2006';
+const VERSION = '20261117-2014';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
