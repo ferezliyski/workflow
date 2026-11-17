@@ -105,6 +105,23 @@ a{color:var(--ink)}
 .item-h .link{flex:none;padding:2px 0;font-size:13px}
 .ie-h{margin-top:10px;font-weight:800}
 .warn{margin-top:10px;font-weight:700;color:#B07F00}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px}
+.cal-h{font-size:11px;font-weight:700;color:var(--soft);text-align:center;padding-bottom:2px}
+.cal-c{min-height:46px;padding:3px;border-radius:6px;background:var(--tint);display:flex;flex-direction:column;align-items:flex-start;gap:2px;overflow:hidden}
+.cal-x{background:none}
+.cal-off{opacity:.45}
+.cal-today{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cal-d{font-size:11px;font-weight:700;color:var(--soft)}
+.cal-p{display:inline-block;padding:0 3px;border-radius:3px;font-size:10px;font-weight:800;line-height:14px;background:var(--ink);color:var(--bg)}
+.cal-p.unpaid{background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.cal-p.sick{background:var(--accent);color:var(--on-accent)}
+.cal-p.other{background:var(--soft);color:var(--bg)}
+.cal-key{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:10px;font-size:11.5px;color:var(--soft)}
+.block h2 .link{padding:0 8px;font-size:20px;text-decoration:none}
+.hols{margin-top:6px}
+.hol{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.lv-field{flex:1;min-width:0}
+.lv-count{margin-top:8px;font-weight:700}
 .star{margin-left:5px;color:#E0A100}
 .prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
 .prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
@@ -245,7 +262,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2206';
+const VERSION = '20261117-2217';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -294,6 +311,15 @@ function realApi() {
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
     },
     async workStats(from, to) { return ok(await sb.rpc('work_stats', { p_from: from, p_to: to })); },
+    async loadLeave() {
+      const [allowances, leaves, holidays, settings] = await Promise.all([
+        sb.from('leave_allowances').select('*'), sb.from('leaves').select('*').order('start_date'),
+        sb.from('holidays').select('*').order('day'), sb.from('app_settings').select('*')
+      ]);
+      return { allowances: ok(allowances), leaves: ok(leaves), holidays: ok(holidays), settings: ok(settings) };
+    },
+    async upsert(table, row) { ok(await sb.from(table).upsert(row)); },
+    async removeBy(table, col, val) { ok(await sb.from(table).delete().eq(col, val)); },
     async loadAll() {
       return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
     },
@@ -318,7 +344,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -564,7 +590,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || F);
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -586,6 +612,15 @@ function renderPop() {
     return;
   }
   UI.fopen = false;
+  if (UI.tab === 'leave' && LV && !LV.err && (UI.leaveEdit || UI.leavePerson)) {
+    const kind = UI.leaveEdit ? 'leave-edit' : 'leave';
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === kind ? prev.scrollTop : 0;
+    box.innerHTML = UI.leaveEdit ? leaveEditHtml() : leavePersonHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
   if (UI.workPerson && UI.tab === 'work') {
     const prev = box.querySelector('.pop-in');
     const keepY = prev && prev.dataset.kind === 'work' ? prev.scrollTop : 0;
@@ -908,6 +943,181 @@ function workPopHtml() {
   </div></div>`;
 }
 
+/* ---------- leave (owner only for now) ---------- */
+let LV = null;
+const KIND = { paid: 'Платен', unpaid: 'Неплатен', sick: 'Болничен', other: 'Друго' };
+const pad2 = n => String(n).padStart(2, '0');
+const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseDay = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const shortDay = s => parseDay(s).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+const range = l => l.start_date === l.end_date ? shortDay(l.start_date) : `${shortDay(l.start_date)} – ${shortDay(l.end_date)}`;
+const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const workweek = () => Number(((LV && LV.settings) || []).find(x => x.key === 'workweek')?.value || 5);
+function holidaySet() { return new Set(((LV && LV.holidays) || []).map(h => h.day)); }
+function isWorkDay(d, hol) { const w = d.getDay(); return (workweek() === 6 ? w !== 0 : w >= 1 && w <= 5) && !hol.has(isoDay(d)); }
+function workDays(start, end, year) {
+  if (!start || !end || end < start) return 0;
+  const hol = holidaySet(); let n = 0;
+  for (let d = parseDay(start), last = parseDay(end); d <= last; d.setDate(d.getDate() + 1)) {
+    if (year && d.getFullYear() !== year) continue;
+    if (isWorkDay(d, hol)) n++;
+  }
+  return n;
+}
+function yearSummary(uid, year) {
+  const mine = ((LV && LV.leaves) || []).filter(l => l.user_id === uid && l.status === 'approved' && l.start_date <= `${year}-12-31` && l.end_date >= `${year}-01-01`);
+  const used = { paid: 0, unpaid: 0, sick: 0, other: 0 };
+  mine.forEach(l => { used[l.kind] += workDays(l.start_date, l.end_date, year); });
+  const a = ((LV && LV.allowances) || []).find(x => x.user_id === uid && x.year === year);
+  const total = a ? Number(a.days) + Number(a.carried) : null;
+  return { mine: mine.sort((x, y) => (x.start_date < y.start_date ? -1 : 1)), used, a, total, left: total == null ? null : total - used.paid };
+}
+async function loadLeave() {
+  try { LV = await api.loadLeave(); } catch (x) { LV = { err: 'Не успях да заредя отпуските. Провери интернета и опитай пак.' }; }
+  if (['leave'].includes(UI.tab)) render();
+}
+async function leaveAct(fn) {
+  try { await fn(); } catch (x) { toast('Не успях да запазя. Провери интернета.'); }
+  await loadLeave();
+}
+
+function viewLeave() {
+  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Отпуски</h1><button class="fbtn" data-act="lv-new">+ Отсъствие</button></div>`;
+  if (!LV) return head + '<p class="empty">Зареждам…</p>';
+  if (LV.err) return head + `<p class="empty">${e(LV.err)}</p>`;
+  const Y = UI.leaveYear, today = isoDay(new Date());
+  const years = [new Date().getFullYear(), new Date().getFullYear() + 1];
+  const yseg = years.map(y => `<button class="chip" data-act="lv-year" data-v="${y}" aria-pressed="${Y === y}">${y}</button>`).join('');
+  // now and upcoming
+  const soon = LV.leaves.filter(l => l.status === 'approved' && l.end_date >= today).sort((a, b) => (a.start_date < b.start_date ? -1 : 1)).slice(0, 12);
+  const soonRows = soon.map(l => {
+    const now = l.start_date <= today;
+    return `<button class="person" data-act="lv-edit" data-id="${l.id}"><span><b>${e(nameOf(l.user_id))}</b> <span class="muted">· ${e(KIND[l.kind])}</span></span>
+      <span class="person-n">${now ? '<span class="late">сега · </span>' : ''}${e(range(l))} · ${workDays(l.start_date, l.end_date)} р.д.</span></button>`;
+  }).join('');
+  // team with balances
+  const people = D.members.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const teamRows = people.map(m => {
+    const y = yearSummary(m.user_id, Y);
+    const off = LV.leaves.find(l => l.user_id === m.user_id && l.status === 'approved' && l.start_date <= today && l.end_date >= today);
+    const bal = y.total == null ? '<span class="muted">няма зададени дни</span>' : `остават <b>${fmtDays(y.left)}</b> от ${fmtDays(y.total)}`;
+    return `<button class="person" data-act="lv-person" data-id="${m.user_id}"><span><b>${e(m.name)}</b>${off ? ` <span class="late">· в отсъствие до ${e(shortDay(off.end_date))}</span>` : ''}</span><span class="person-n">${bal}</span></button>`;
+  }).join('');
+  return head + `<div class="chips" style="margin-bottom:14px">${yseg}</div>
+    <section class="group"><h2>Сега и предстоящи</h2>${soonRows || '<p class="small muted" style="padding:12px 14px">Няма записани отсъствия.</p>'}</section>
+    <section class="group"><h2>Екип · ${Y}</h2>${teamRows}</section>
+    ${calendarHtml()}
+    ${leaveSettingsHtml()}`;
+}
+const fmtDays = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
+
+function calendarHtml() {
+  const now = new Date();
+  const [y, m] = (UI.leaveMonth || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`).split('-').map(Number);
+  const first = new Date(y, m - 1, 1), daysIn = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const hol = holidaySet(), today = isoDay(now);
+  const holName = Object.fromEntries(LV.holidays.map(h => [h.day, h.name]));
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<div class="cal-c cal-x"></div>');
+  for (let d = 1; d <= daysIn; d++) {
+    const day = new Date(y, m - 1, d), key = isoDay(day), work = isWorkDay(day, hol);
+    const who = LV.leaves.filter(l => l.status === 'approved' && l.start_date <= key && l.end_date >= key);
+    cells.push(`<div class="cal-c ${work ? '' : 'cal-off'} ${key === today ? 'cal-today' : ''}" ${holName[key] ? `title="${e(holName[key])}"` : ''}>
+      <span class="cal-d">${d}</span>${who.map(l => `<span class="cal-p ${l.kind}" title="${e(nameOf(l.user_id))} · ${e(KIND[l.kind])}">${e(initials(nameOf(l.user_id)))}</span>`).join('')}</div>`);
+  }
+  const label = first.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' });
+  return `<section class="block"><h2><button class="link" data-act="lv-month" data-v="-1" aria-label="Предишен месец">‹</button><span>${e(label)}</span><button class="link" data-act="lv-month" data-v="1" aria-label="Следващ месец">›</button></h2>
+    <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(x => `<div class="cal-h">${x}</div>`).join('')}${cells.join('')}</div>
+    <p class="cal-key"><span class="cal-p paid">АБ</span> платен <span class="cal-p unpaid">АБ</span> неплатен <span class="cal-p sick">АБ</span> болничен <span class="cal-p other">АБ</span> друго · сиво = почивен ден или празник</p></section>`;
+}
+
+function leaveSettingsHtml() {
+  const Y = UI.leaveYear, ww = workweek();
+  const hols = LV.holidays.filter(h => h.day.startsWith(String(Y)));
+  return `<section class="block"><h2><span>Настройки за отпуските</span></h2>
+    <span class="lbl">Работна седмица</span>
+    <div class="chips"><button class="chip" data-act="lv-ww" data-v="5" aria-pressed="${ww === 5}">Пон–Пет</button><button class="chip" data-act="lv-ww" data-v="6" aria-pressed="${ww === 6}">Пон–Съб</button></div>
+    <button class="group-toggle" data-act="lv-hols" style="padding:14px 0 4px">Неработни празници ${Y} (${hols.length}) <span>${UI.showHolidays ? 'Скрий' : 'Покажи'}</span></button>
+    ${UI.showHolidays ? `<div class="hols">${hols.map(h => `<div class="hol"><span><b>${e(shortDay(h.day))}</b> ${e(h.name)}</span><button class="link" data-act="lv-hol-del" data-v="${h.day}" aria-label="Махни">✕</button></div>`).join('') || '<p class="small muted">Няма въведени празници за тази година.</p>'}
+      <div class="inline" style="margin-top:10px"><input class="field" id="hol-day" type="date"><input class="field" id="hol-name" autocomplete="off"></div>
+      <button class="btn ghost" data-act="lv-hol-add" style="margin-top:8px">Добави празник</button></div>` : ''}
+  </section>`;
+}
+
+function leavePersonHtml() {
+  const uid = UI.leavePerson, Y = UI.leaveYear, y = yearSummary(uid, Y);
+  const tile = (label, value) => `<div class="tile"><span>${e(label)}</span><b>${e(value)}</b></div>`;
+  const rows = y.mine.map(l => `<button class="person" data-act="lv-edit" data-id="${l.id}"><span><b>${e(KIND[l.kind])}</b>${l.note ? ` <span class="muted">· ${e(l.note)}</span>` : ''}</span><span class="person-n">${e(range(l))} · ${workDays(l.start_date, l.end_date, Y)} р.д.</span></button>`).join('');
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="leave" role="dialog" aria-modal="true" aria-label="${e(nameOf(uid))}">
+    <div class="pop-head"><b class="who">${e(nameOf(uid))} · ${Y}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <div class="inline" style="margin-top:12px">
+        <label class="lv-field"><span class="lbl">Полагаеми дни</span><input class="field" id="al-days" inputmode="decimal" value="${y.a ? fmtDays(y.a.days) : ''}" data-uid="${uid}"></label>
+        <label class="lv-field"><span class="lbl">Прехвърлени</span><input class="field" id="al-carried" inputmode="decimal" value="${y.a ? fmtDays(y.a.carried) : ''}" data-uid="${uid}"></label>
+      </div>
+      <div class="tiles" style="margin-top:14px">
+        ${tile('Остават', y.left == null ? '—' : fmtDays(y.left))}
+        ${tile('Платен', fmtDays(y.used.paid) + (y.total == null ? '' : ' от ' + fmtDays(y.total)))}
+        ${tile('Неплатен', fmtDays(y.used.unpaid))}
+        ${tile('Болничен', fmtDays(y.used.sick))}
+        ${y.used.other ? tile('Друго', fmtDays(y.used.other)) : ''}
+      </div>
+      <section class="group" style="margin-top:4px"><h2>Отсъствия ${Y}</h2>${rows || '<p class="small muted" style="padding:12px 14px">Няма записани отсъствия.</p>'}</section>
+      <button class="btn wide" data-act="lv-new" data-id="${uid}">+ Отсъствие за ${e(nameOf(uid))}</button>
+    </div></div></div>`;
+}
+
+function leaveEditHtml() {
+  const E = UI.leaveEdit, d = E.draft;
+  const n = workDays(d.start, d.end);
+  const overlap = d.user_id && d.start && d.end && LV.leaves.some(l => l.id !== E.id && l.user_id === d.user_id && l.status === 'approved' && l.start_date <= d.end && l.end_date >= d.start);
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="leave-edit" role="dialog" aria-modal="true" aria-label="Отсъствие">
+    <div class="pop-head"><b class="who">${E.id ? 'Отсъствие' : 'Ново отсъствие'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <label class="lbl" for="lv-user">Кой</label>
+      <select class="field" id="lv-user"><option value="">Избери…</option>${D.members.map(m => `<option value="${m.user_id}" ${d.user_id === m.user_id ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select>
+      <span class="lbl">Вид</span>
+      <div class="chips">${Object.entries(KIND).map(([k, l]) => `<button class="chip" data-act="lv-kind" data-v="${k}" aria-pressed="${d.kind === k}">${l}</button>`).join('')}</div>
+      <div class="inline">
+        <label class="lv-field"><span class="lbl">От</span><input class="field" id="lv-start" type="date" value="${e(d.start)}"></label>
+        <label class="lv-field"><span class="lbl">До</span><input class="field" id="lv-end" type="date" value="${e(d.end)}"></label>
+      </div>
+      <p class="lv-count" id="lv-count">${d.start && d.end ? (d.end < d.start ? 'Крайната дата е преди началната.' : `${n} ${n === 1 ? 'работен ден' : 'работни дни'}`) : ''}</p>
+      <label class="lbl" for="lv-note">Бележка</label><input class="field" id="lv-note" value="${e(d.note)}" autocomplete="off">
+      ${overlap ? '<p class="warn">Този човек вече има отсъствие в част от тези дни.</p>' : ''}
+      <p class="err" role="alert">${e(E.err || '')}</p>
+      <div class="actions"><button class="btn" data-act="lv-save">Запази</button><button class="btn ghost" data-act="lv-cancel">Отказ</button></div>
+      ${E.id ? `<div class="actions"><button class="btn danger" data-act="lv-del">${UI.armed === 'leave:' + E.id ? 'Натисни пак, за да изтриеш' : 'Изтрий отсъствието'}</button></div>` : ''}
+    </div></div></div>`;
+}
+function startLeaveEdit(id, uid) {
+  const l = id && LV.leaves.find(x => x.id === id);
+  const t = isoDay(new Date());
+  UI.leaveEdit = { id: l ? l.id : null, err: '', draft: l
+    ? { user_id: l.user_id, kind: l.kind, start: l.start_date, end: l.end_date, note: l.note }
+    : { user_id: uid || UI.leavePerson || '', kind: 'paid', start: t, end: t, note: '' } };
+  renderPop();
+}
+async function saveLeave() {
+  const E = UI.leaveEdit, d = E.draft;
+  if (!d.user_id) { E.err = 'Избери човек.'; return renderPop(); }
+  if (!d.start || !d.end) { E.err = 'Избери от коя до коя дата.'; return renderPop(); }
+  if (d.end < d.start) { E.err = 'Крайната дата е преди началната.'; return renderPop(); }
+  const row = { user_id: d.user_id, kind: d.kind, start_date: d.start, end_date: d.end, note: d.note.trim() };
+  const id = E.id;
+  UI.leaveEdit = null;
+  await leaveAct(() => id ? api.update('leaves', id, row) : api.insert('leaves', row));
+  toast(id ? 'Отсъствието е променено' : 'Отсъствието е записано');
+}
+async function saveAllowance(uid, field, raw) {
+  const v = parsePrice(raw);
+  const Y = UI.leaveYear, cur = yearSummary(uid, Y).a || { user_id: uid, year: Y, days: 20, carried: 0 };
+  const row = { user_id: uid, year: Y, days: Number(cur.days), carried: Number(cur.carried) };
+  row[field] = v == null ? 0 : v;
+  await leaveAct(() => api.upsert('leave_allowances', row));
+}
+
 /* ---------- profile & personal tasks ---------- */
 const openTask = t => !t.done_at;
 const taskSort = (a, b) => (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1);
@@ -957,6 +1167,7 @@ function viewProfile() {
     return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
       <section class="group"><h2>Екип</h2>${rows}</section>
       <div class="actions" style="margin-top:6px"><button class="btn" data-act="tab" data-v="stats" style="flex:1">Статистика</button><button class="btn" data-act="tab" data-v="work" style="flex:1">Работа по хора</button></div>
+      <button class="btn wide" data-act="tab" data-v="leave" style="margin-top:8px">Отпуски</button>
       ${settingsBtn}`;
   }
   const uid = admin ? UI.person : me.id;
@@ -1030,9 +1241,9 @@ async function saveTask() {
 function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
-  if ((UI.tab === 'stats' || UI.tab === 'work') && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats, work: viewWork }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && (UI.tab === 'settings' || UI.tab === 'stats' || UI.tab === 'work')) ? 'aria-current="page"' : ''}>${l}</button>`;
+  if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1296,12 +1507,12 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.workPerson = null; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0);
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
@@ -1309,7 +1520,7 @@ document.addEventListener('click', async ev => {
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'search':
       if (UI.searching) { UI.searching = false; UI.q = ''; return render(); }
@@ -1349,6 +1560,34 @@ document.addEventListener('click', async ev => {
     case 'phone-done': {
       const f = $(`#ph-${id}`); UI.editPhone = null;
       return act(() => api.update('orders', id, { phone: f ? f.value.trim() : '' }));
+    }
+    case 'lv-year': UI.leaveYear = Number(v); return render();
+    case 'lv-person': UI.leavePerson = id; return renderPop();
+    case 'lv-new': return startLeaveEdit(null, id || null);
+    case 'lv-edit': return startLeaveEdit(id);
+    case 'lv-kind': UI.leaveEdit.draft.kind = v; return renderPop();
+    case 'lv-save': return saveLeave();
+    case 'lv-cancel': UI.leaveEdit = null; return renderPop();
+    case 'lv-del': {
+      const E = UI.leaveEdit;
+      if (UI.armed !== 'leave:' + E.id) { UI.armed = 'leave:' + E.id; return renderPop(); }
+      UI.armed = null; UI.leaveEdit = null;
+      await leaveAct(() => api.remove('leaves', E.id));
+      return toast('Отсъствието е изтрито');
+    }
+    case 'lv-month': {
+      const now = new Date(), cur = (UI.leaveMonth || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`).split('-').map(Number);
+      const d = new Date(cur[0], cur[1] - 1 + Number(v), 1);
+      UI.leaveMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+      return render();
+    }
+    case 'lv-ww': return leaveAct(() => api.upsert('app_settings', { key: 'workweek', value: v }));
+    case 'lv-hols': UI.showHolidays = !UI.showHolidays; return render();
+    case 'lv-hol-del': return leaveAct(() => api.removeBy('holidays', 'day', v));
+    case 'lv-hol-add': {
+      const day = $('#hol-day').value, name = $('#hol-name').value.trim();
+      if (!day) return;
+      return leaveAct(() => api.upsert('holidays', { day, name }));
     }
     case 'work-period': UI.workPeriod = v; return loadWork();
     case 'work-person': UI.workPerson = id; return renderPop();
@@ -1445,12 +1684,24 @@ document.addEventListener('click', async ev => {
 document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', ev => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
-  if (ev.key === 'Escape' && UI.workPerson) { UI.workPerson = null; renderPop(); }
+  if (ev.key === 'Escape' && UI.leaveEdit) { UI.leaveEdit = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.leavePerson) { UI.leavePerson = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.workPerson) { UI.workPerson = null; renderPop(); }
   else if (ev.key === 'Escape' && UI.task) { UI.task = null; renderPop(); }
   else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (UI.leaveEdit) {
+    const k = { 'lv-start': 'start', 'lv-end': 'end', 'lv-note': 'note' }[t.id];
+    if (k) {
+      const d = UI.leaveEdit.draft; d[k] = t.value;
+      if (k !== 'note') { if (k === 'start' && (!d.end || d.end < d.start)) { d.end = d.start; const en = $('#lv-end'); if (en) en.value = d.end; }
+        const c = $('#lv-count'), n = workDays(d.start, d.end);
+        if (c) c.textContent = d.start && d.end ? (d.end < d.start ? 'Крайната дата е преди началната.' : `${n} ${n === 1 ? 'работен ден' : 'работни дни'}`) : ''; }
+      return;
+    }
+  }
   if (UI.itemEdit) {
     const k = { 'ie-name': 'name', 'ie-note': 'note', 'ie-extra': 'extra' }[t.id];
     if (k) { UI.itemEdit.draft[k] = t.value; return; }
@@ -1470,6 +1721,9 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (UI.leaveEdit && t.id === 'lv-user') { UI.leaveEdit.draft.user_id = t.value; return renderPop(); }
+  if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
+  if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
     if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
     if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; return renderPop(); }
