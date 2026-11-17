@@ -187,7 +187,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2001';
+const VERSION = '20261117-2006';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -318,7 +318,7 @@ function cardHtml(o) {
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
   else if (allReady) orderRow = nowRow('Писане на товарителница', 'work', 'waybill', o.id, 'Готово') +
-    ((o.address || o.phone) ? `<p class="ship">${e([o.customer, o.phone, o.address].filter(Boolean).join(' · '))}</p>` : '<p class="ship muted">Няма въведен адрес. Добави го от „Още“.</p>');
+    ((o.address || o.phone) ? `<p class="ship">${e([o.customer, o.phone, o.address].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}</span><span class="src">${e(src)}</span></div>
@@ -340,7 +340,7 @@ function bodyHtml(o) {
     const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'cur' : ''}`)).join('');
     const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
       <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
-    return `<div class="item"><h3>${e(itemLabel(it))}</h3><p class="small muted">Докосни етап, за да го отбележиш или върнеш.</p>
+    return `<div class="item"><h3>${e(itemLabel(it))}</h3>
       ${it.custom_design ? '<p class="small muted">Дизайн по желание на клиента</p>' : ''}
       ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
       <div class="steps">${steps}${photo}</div></div>`;
@@ -348,6 +348,8 @@ function bodyHtml(o) {
   const armed = UI.armed === o.id;
   return `<div class="card-body">
     ${o.phone ? `<p class="small" style="margin-top:12px">Телефон: <a href="tel:${e(o.phone)}">${e(o.phone)}</a></p>` : ''}
+    <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
+    <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
     ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
     ${o.needs_confirm ? `<div class="steps" style="margin-top:12px">${stepBtn('confirm', o.id, 'Клиентът потвърди по телефона', o.confirmed_at, o.confirmed_by, 'wait')}</div>` : ''}
     ${items}
@@ -355,12 +357,10 @@ function bodyHtml(o) {
       ${stepBtn('pack', o.id, 'Опаковано', o.packed_at, o.packed_by)}
       ${stepBtn('waybill', o.id, 'Товарителница написана', o.waybill_at, o.waybill_by)}
     </div></div>
-    <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
-    <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" placeholder="Град, адрес или офис на куриер" autocomplete="off">
     <label class="lbl" for="trk-${o.id}">Номер на товарителница</label>
     <input class="field" id="trk-${o.id}" data-field="tracking" data-id="${o.id}" value="${e(o.tracking)}" inputmode="text" autocomplete="off">
     <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
-    <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" placeholder="Напр. няма заготовка L черна" autocomplete="off">
+    <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" autocomplete="off">
     <div class="actions">
       <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
       <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
@@ -521,7 +521,7 @@ function editorHtml() {
       <option value="custom" ${it.typeId === 'custom' ? 'selected' : ''}>Друго (нова задача)</option></select>
     ${body}
     ${it.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div>
-      <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" placeholder="Напр. текст, щампа, файл" autocomplete="off">
+      <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" autocomplete="off">
       <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>` : ''}
   </div>`;
 }
@@ -539,7 +539,7 @@ function renderForm() {
     <div class="sheet-top"><h2>Нова поръчка</h2><button class="link" data-act="f-close">Отказ</button></div>
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
     <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
-    <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" placeholder="Град, адрес или офис на куриер" autocomplete="off">${e(F.address)}</textarea>
+    <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
