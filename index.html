@@ -245,7 +245,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2133';
+const VERSION = '20261117-2148';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -276,6 +276,23 @@ function realApi() {
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
     },
+    // only what changed since a moment: orders (with their products and stages), tasks and notes
+    async syncSince(iso) {
+      const [orders, tasks, notes] = await Promise.all([
+        sb.from('orders').select('*, items(*, item_stages(*))').gte('updated_at', iso),
+        sb.from('tasks').select('*').gte('updated_at', iso),
+        sb.from('order_notes').select('*').gte('created_at', iso)
+      ]);
+      return { orders: ok(orders), tasks: ok(tasks), notes: ok(notes) };
+    },
+    async loadOrders(ids) { return ok(await sb.from('orders').select('*, items(*, item_stages(*))').in('id', ids)); },
+    async loadConfig() {
+      const [members, options, stageDefs, types, typeStages] = await Promise.all([
+        sb.from('members').select('*'), sb.from('options').select('*').order('sort'), sb.from('stage_defs').select('*').order('sort'),
+        sb.from('product_types').select('*').order('sort'), sb.from('product_type_stages').select('*').order('sort')
+      ]);
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
+    },
     async loadAll() {
       return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
     },
@@ -284,14 +301,14 @@ function realApi() {
     async update(table, id, patch) { ok(await sb.from(table).update(patch).eq('id', id)); },
     async insert(table, row) { ok(await sb.from(table).insert(row)); },
     async remove(table, id) { ok(await sb.from(table).delete().eq('id', id)); },
-    subscribe(cb) {
-      sb.channel('workflow')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'item_stages' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, cb)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'order_notes' }, cb)
-        .subscribe();
+    subscribe(h) {
+      const on = (ch, table, fn) => ch.on('postgres_changes', { event: '*', schema: 'public', table }, fn);
+      let ch = sb.channel('workflow');
+      ch = on(ch, 'orders', h.orders);
+      ch = on(ch, 'tasks', h.tasks);
+      ch = on(ch, 'order_notes', h.notes);
+      ['members', 'options', 'product_types', 'product_type_stages'].forEach(t => { ch = on(ch, t, h.config); });
+      ch.subscribe(status => h.status(status));
     }
   };
 }
@@ -647,7 +664,7 @@ function filterPopHtml() {
 
 let allOrders = null, allLoading = false;
 async function loadAllOrders() {
-  if (allLoading) return;
+  if (allLoading || allOrders) return;
   allLoading = true;
   try { allOrders = await api.loadAll(); } catch (x) { /* fall back to what is loaded */ }
   allLoading = false;
@@ -1074,16 +1091,105 @@ async function saveOrder() {
 }
 
 /* ---------- actions ---------- */
-let timer = 0;
-async function refresh(force) {
-  if (!me) return;
-  try { D = await api.load(); } catch (x) { return; }
-  const el = document.activeElement;
-  if (!force && el && el.closest && el.closest('#app, #pop') && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
-  render();
+/* ---------- keeping phones in sync without downloading everything ----------
+   Full load only when the app opens. After that: live updates per changed order,
+   plus a light catch-up (only rows changed since the last sync) on return to the
+   app, after a dropped connection and every few minutes as a safety net. */
+let lastSync = 0, pendingRedraw = false;
+const RECENT_MS = 30 * 864e5;
+const keepInList = o => !o.waybill_at || Date.now() - new Date(o.waybill_at).getTime() < RECENT_MS;
+const lightOf = o => ({ id: o.id, num: o.num, customer: o.customer, phone: o.phone, price: o.price, brand: o.brand, channel: o.channel,
+  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty })) });
+function upsert(list, row, key = 'id') { const i = list.findIndex(x => x[key] === row[key]); if (i >= 0) list[i] = row; else list.push(row); }
+function mergeOrder(o) {
+  if (keepInList(o)) upsert(D.orders, o); else D.orders = D.orders.filter(x => x.id !== o.id);
+  upsert(D.history, lightOf(o));
+  if (allOrders) upsert(allOrders, o);
 }
-const soon = () => { clearTimeout(timer); timer = setTimeout(() => refresh(), 400); };
-async function act(fn) { try { await fn(); } catch (x) { /* shown after reload */ } await refresh(true); }
+function dropOrder(id) {
+  D.orders = D.orders.filter(x => x.id !== id);
+  D.history = D.history.filter(x => x.id !== id);
+  D.notes = D.notes.filter(n => n.order_id !== id);
+  if (allOrders) allOrders = allOrders.filter(x => x.id !== id);
+}
+function redraw(force) {
+  const el = document.activeElement;
+  if (!force && el && el.id === 'q') { updateResults(); return; }   // search results can refresh under the search box
+  if (!force && el && el.closest && el.closest('#app, #pop') && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) { pendingRedraw = true; return; }
+  pendingRedraw = false;
+  render();
+  if (UI.searching) updateResults();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRedraw) redraw(); }, 120));
+
+async function fullLoad() {
+  const t0 = Date.now();
+  try { D = await api.load(); } catch (x) { return false; }
+  lastSync = t0;
+  redraw(true);
+  return true;
+}
+let syncing = null;
+async function sync() {
+  if (!me) return;
+  if (syncing) return syncing;
+  syncing = (async () => {
+    const t0 = Date.now();
+    // two minutes of overlap so a slightly wrong phone clock cannot skip a change
+    const since = new Date((lastSync || t0) - 120000).toISOString();
+    try {
+      const r = await api.syncSince(since);
+      r.orders.forEach(mergeOrder);
+      r.tasks.forEach(t => upsert(D.tasks, t));
+      r.notes.forEach(n => upsert(D.notes, n));
+      lastSync = t0;
+    } catch (x) { /* offline: try again later */ }
+  })();
+  try { await syncing; } finally { syncing = null; }
+}
+async function refresh(force) { await sync(); redraw(force); }
+
+// live updates: collect changed orders for a moment, then fetch just those
+let orderQueue = new Set(), orderTimer = 0, configTimer = 0, liveDown = false;
+function onOrderChange(ev) {
+  if (ev.eventType === 'DELETE') { if (ev.old && ev.old.id) { dropOrder(ev.old.id); redraw(); } return; }
+  if (!ev.new || !ev.new.id) return;
+  orderQueue.add(ev.new.id);
+  clearTimeout(orderTimer);
+  orderTimer = setTimeout(async () => {
+    const ids = [...orderQueue]; orderQueue = new Set();
+    try { (await api.loadOrders(ids)).forEach(mergeOrder); } catch (x) { return; }
+    redraw();
+  }, 300);
+}
+function onTaskChange(ev) {
+  if (ev.eventType === 'DELETE') D.tasks = D.tasks.filter(t => t.id !== (ev.old && ev.old.id));
+  else if (ev.new && ev.new.id) upsert(D.tasks, ev.new);
+  redraw();
+}
+function onNoteChange(ev) {
+  if (ev.eventType === 'DELETE') D.notes = D.notes.filter(n => n.id !== (ev.old && ev.old.id));
+  else if (ev.new && ev.new.id) upsert(D.notes, ev.new);
+  redraw();
+}
+async function reloadConfig() {
+  try { Object.assign(D, await api.loadConfig()); } catch (x) { return; }
+  redraw();
+}
+function onConfigChange() { clearTimeout(configTimer); configTimer = setTimeout(reloadConfig, 400); }
+function onLiveStatus(status) {
+  if (status === 'SUBSCRIBED') { if (liveDown) { liveDown = false; refresh(); } }
+  else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') liveDown = true;
+}
+
+// after my own change: apply what I know right away, then pick up the rest
+async function act(fn, after) {
+  try { await fn(); } catch (x) { /* the catch-up below shows the real state */ }
+  if (after && after.dropOrder) dropOrder(after.dropOrder);
+  if (after && after.dropTask) D.tasks = D.tasks.filter(t => t.id !== after.dropTask);
+  if (after && after.config) await reloadConfig();
+  await refresh(true);
+}
 const findOrder = id => D.orders.find(o => o.id === id);
 let toastTimer = 0;
 function toast(text, undoAct, id) {
@@ -1194,7 +1300,7 @@ document.addEventListener('click', async ev => {
     case 'task-del':
       if (UI.armed !== 'task:' + id) { UI.armed = 'task:' + id; return renderPop(); }
       UI.armed = null; UI.task = null;
-      return act(() => api.remove('tasks', id));
+      return act(() => api.remove('tasks', id), { dropTask: id });
     case 'note-add': {
       const f = $(`#nt-${id}`), body = f ? f.value.trim() : '';
       if (!body) return;
@@ -1235,13 +1341,13 @@ document.addEventListener('click', async ev => {
     case 'delete':
       if (UI.armed !== id) { UI.armed = id; return render(); }
       UI.armed = null; UI.open = null;
-      return act(() => api.remove('orders', id));
+      return act(() => api.remove('orders', id), { dropOrder: id });
     case 'opt-add': {
       const val = $(`#new-${v}`).value.trim();
       if (!val || opts(v).some(o => o.value === val)) return;
-      return act(() => api.insert('options', { kind: v, value: val, sort: opts(v).length + 1 }));
+      return act(() => api.insert('options', { kind: v, value: val, sort: opts(v).length + 1 }), { config: true });
     }
-    case 'opt-del': return act(() => api.remove('options', id));
+    case 'opt-del': return act(() => api.remove('options', id), { config: true });
     /* form */
     case 'f-close': F = null; return renderForm();
     case 'f-brand': F.brand = v; return renderForm();
@@ -1318,7 +1424,7 @@ document.addEventListener('change', ev => {
   if (t.dataset.field) return act(() => api.update('orders', t.dataset.id, { [t.dataset.field]: t.value.trim() }));
   if (t.dataset.type) {
     const list = [...new Set(t.value.split(',').map(s => s.trim()).filter(Boolean))];
-    return act(() => api.update('product_types', t.dataset.type, { [t.dataset.list]: list }));
+    return act(() => api.update('product_types', t.dataset.type, { [t.dataset.list]: list }), { config: true });
   }
 });
 
@@ -1344,12 +1450,14 @@ async function checkVersion() {
 let live = false;
 async function start() {
   render();
-  await refresh(true);
+  await fullLoad();
   if (!live) {
     live = true;
-    api.subscribe(soon);
-    setInterval(() => { if (!document.hidden) refresh(); }, 30000);
+    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, status: onLiveStatus });
+    // safety net in case a live update was missed: a light catch-up every 3 minutes while on screen
+    setInterval(() => { if (!document.hidden) refresh(); }, 3 * 60000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    window.addEventListener('online', () => refresh());
   }
 }
 checkVersion();
