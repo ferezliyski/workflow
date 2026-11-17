@@ -180,7 +180,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-1943';
+const VERSION = '20261117-1947';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -493,6 +493,9 @@ function editorHtml() {
 function renderForm() {
   const sheet = $('#sheet');
   if (!F) { sheet.innerHTML = ''; return; }
+  // keep the scroll position: redrawing the form must not jump back to the top
+  const prev = sheet.querySelector('.sheet');
+  const keepY = prev ? prev.scrollTop : 0;
   const pick = (act, kind, cur) => `<div class="chips">${opts(kind).map(o => `<button type="button" class="chip" data-act="${act}" data-v="${e(o.value)}" aria-pressed="${cur === o.value}">${e(o.value)}</button>`).join('')}</div>`;
   const hasTee = F.items.concat(F.edit).some(i => (typeOf(i.typeId) || {}).is_tshirt);
   const confirm = F.confirm == null ? hasTee : F.confirm;
@@ -514,6 +517,10 @@ function renderForm() {
     <p class="err" role="alert">${e(F.err)}</p>
     <button class="btn wide" data-act="f-save" ${F.busy ? 'disabled' : ''}>Запази поръчката</button>
   </div></div>`;
+  const box = sheet.querySelector('.sheet');
+  box.scrollTop = keepY;
+  const err = box.querySelector('.err');
+  if (F.err && err) err.scrollIntoView({ block: 'center' });
 }
 function addDraft() {
   const it = F.edit, t = typeOf(it.typeId);
