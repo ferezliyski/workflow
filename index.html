@@ -245,7 +245,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2148';
+const VERSION = '20261117-2203';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -293,6 +293,7 @@ function realApi() {
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
     },
+    async workStats(from, to) { return ok(await sb.rpc('work_stats', { p_from: from, p_to: to })); },
     async loadAll() {
       return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
     },
@@ -317,7 +318,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -843,6 +844,48 @@ function viewStats() {
     <p class="small muted" style="margin-top:6px">Оборотът е сборът от цените за наложен платеж, въведени в поръчките.</p>`;
 }
 
+/* ---------- work per person (owner only) ---------- */
+const WORK_PERIODS = [['today', 'Днес'], ['7', '7 дни'], ['month', 'Този месец'], ['prev', 'Миналия месец'], ['90', '90 дни'], ['all', 'Всичко']];
+async function loadWork() {
+  const key = UI.workPeriod, [from, to] = periodRange(key);
+  UI.work = { key, loading: true, rows: UI.work && UI.work.key === key ? UI.work.rows : null, err: '' };
+  render();
+  try {
+    const rows = await api.workStats(from ? from.toISOString() : null, to ? to.toISOString() : null);
+    if (UI.workPeriod !== key) return;
+    UI.work = { key, loading: false, rows, err: '' };
+  } catch (x) { UI.work = { key, loading: false, rows: null, err: 'Не успях да заредя данните. Провери интернета и опитай пак.' }; }
+  if (UI.tab === 'work') render();
+}
+function viewWork() {
+  const W = UI.work;
+  const seg = WORK_PERIODS.map(([v, l]) => `<button class="chip" data-act="work-period" data-v="${v}" aria-pressed="${UI.workPeriod === v}">${l}</button>`).join('');
+  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Работа по хора</h1></div>
+    <div class="chips" style="margin-bottom:14px">${seg}</div>`;
+  if (!W || (W.loading && !W.rows)) return head + '<p class="empty">Зареждам…</p>';
+  if (W.err) return head + `<p class="empty">${e(W.err)}</p>`;
+  // order of rows: production stages as they run, then order-level steps
+  const stageOrder = D.stageDefs.map(x => x.name);
+  const kindOrder = ['stage', 'pack', 'waybill', 'confirm', 'created', 'task'];
+  const rank = r => kindOrder.indexOf(r.kind) * 1000 + (r.kind === 'stage' ? (stageOrder.indexOf(r.label) + 1 || 999) : 0);
+  const val = r => r.kind === 'stage' ? Number(r.qty) : Number(r.n);
+  const maxBy = {};
+  W.rows.forEach(r => { const k = r.kind + '|' + r.label; maxBy[k] = Math.max(maxBy[k] || 0, val(r)); });
+  const people = D.members.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const blocks = people.map(m => {
+    const mine = W.rows.filter(r => r.user_id === m.user_id).sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+    const body = mine.length ? `<div class="bars">${mine.map(r => {
+      const v = val(r), max = maxBy[r.kind + '|' + r.label] || 1;
+      return `<div class="bar-row"><span class="bar-l">${e(r.label)}</span><span class="bar-v">${v}${r.kind === 'stage' ? ' бр.' : ''}</span>
+        <span class="bar-t"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span></div>`;
+    }).join('')}</div>` : '<p class="small muted" style="margin-top:8px">Няма отбелязана работа за този период.</p>';
+    return `<section class="block"><h2><span>${e(m.name)}</span></h2>${body}</section>`;
+  }).join('');
+  return head + `${W.loading ? '<p class="fnow">Обновявам…</p>' : ''}${blocks}
+    <p class="small muted" style="margin-top:6px">Етапите се броят в бройки (2 тениски в един ред са 2). Чертата показва човека спрямо най-добрия в екипа за същото. Когато някой отбележи по-късен етап, по-ранните неотбелязани етапи също се записват на него.</p>`;
+}
+
 /* ---------- profile & personal tasks ---------- */
 const openTask = t => !t.done_at;
 const taskSort = (a, b) => (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1);
@@ -891,7 +934,7 @@ function viewProfile() {
     }).join('');
     return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
       <section class="group"><h2>Екип</h2>${rows}</section>
-      <button class="btn wide" data-act="tab" data-v="stats" style="margin-top:6px">Статистика</button>
+      <div class="actions" style="margin-top:6px"><button class="btn" data-act="tab" data-v="stats" style="flex:1">Статистика</button><button class="btn" data-act="tab" data-v="work" style="flex:1">Работа по хора</button></div>
       ${settingsBtn}`;
   }
   const uid = admin ? UI.person : me.id;
@@ -965,9 +1008,9 @@ async function saveTask() {
 function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
-  if (UI.tab === 'stats' && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && (UI.tab === 'settings' || UI.tab === 'stats')) ? 'aria-current="page"' : ''}>${l}</button>`;
+  if ((UI.tab === 'stats' || UI.tab === 'work') && !isAdmin()) UI.tab = 'profile';
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats, work: viewWork }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && (UI.tab === 'settings' || UI.tab === 'stats' || UI.tab === 'work')) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1236,7 +1279,8 @@ document.addEventListener('click', async ev => {
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
+    case 'tab': if (v === 'work' && isAdmin()) setTimeout(loadWork, 0);
+      if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
@@ -1284,6 +1328,7 @@ document.addEventListener('click', async ev => {
       const f = $(`#ph-${id}`); UI.editPhone = null;
       return act(() => api.update('orders', id, { phone: f ? f.value.trim() : '' }));
     }
+    case 'work-period': UI.workPeriod = v; return loadWork();
     case 'stats-period': UI.statsPeriod = v; return render();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
     case 'show-done': UI.showDone = !UI.showDone; return render();
