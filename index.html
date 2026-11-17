@@ -245,7 +245,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2124';
+const VERSION = '20261117-2133';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -763,6 +763,8 @@ function viewSettings() {
 const MONTHS = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
 function periodRange(k) {
   const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (k === 'today') return [new Date(y, m, now.getDate()), null];
+  if (k === '7') return [new Date(y, m, now.getDate() - 6), null];
   if (k === 'month') return [new Date(y, m, 1), null];
   if (k === 'prev') return [new Date(y, m - 1, 1), new Date(y, m, 1)];
   if (k === '90') return [new Date(Date.now() - 90 * 864e5), null];
@@ -805,7 +807,7 @@ function viewStats() {
   const tile = (label, value, sub) => `<div class="tile"><span>${e(label)}</span><b>${e(value)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>`;
   return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
     <div class="top"><h1>Статистика</h1><span>${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}</span></div>
-    <div class="chips" style="margin-bottom:14px">${seg('month', 'Този месец')}${seg('prev', 'Миналия месец')}${seg('90', '90 дни')}${seg('all', 'Всичко')}</div>
+    <div class="chips" style="margin-bottom:14px">${seg('today', 'Днес')}${seg('7', '7 дни')}${seg('month', 'Този месец')}${seg('prev', 'Миналия месец')}${seg('90', '90 дни')}${seg('all', 'Всичко')}</div>
     <div class="tiles">
       ${tile('Поръчки', String(list.length), `${shipped} изпратени`)}
       ${tile('Оборот', money(total) || '0,00 €', priced.length < list.length ? `${list.length - priced.length} без цена` : 'наложен платеж')}
