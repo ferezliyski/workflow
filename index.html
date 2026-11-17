@@ -96,6 +96,31 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 a{color:var(--ink)}
 .ready{margin-top:6px;font-weight:700;color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
+.back{display:inline-block;margin:-4px 0 4px;padding:6px 0;font-size:13.5px;text-decoration:none}
+.group{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:18px}
+.group h2{padding:9px 14px;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--band);color:var(--on-band)}
+.group-toggle{appearance:none;display:flex;justify-content:space-between;width:100%;padding:12px 14px;border:0;background:none;color:var(--ink);font-weight:700;font-size:13.5px}
+.group-toggle span{color:var(--soft)}
+.task{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-top:1px solid var(--line)}
+.group h2 + .task{border-top:0}
+.tick{appearance:none;flex:none;display:grid;place-items:center;width:26px;height:26px;margin-top:1px;border-radius:50%;border:2px solid var(--soft);background:none;color:var(--on-accent);font-weight:900;font-size:14px;line-height:1}
+.tick.on{background:var(--next);border-color:var(--next)}
+.task-main{appearance:none;flex:1;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left}
+.task-title{display:block;font-weight:700;font-size:14.5px;overflow-wrap:anywhere}
+.task-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;font-size:12.5px;color:var(--soft)}
+.task.done .task-title{text-decoration:line-through;color:var(--soft)}
+.late{color:var(--accent);font-weight:700}
+.task-h{margin-top:14px;font-size:17px;font-weight:800;overflow-wrap:anywhere}
+.task-note{margin-top:8px;white-space:pre-wrap}
+.person{appearance:none;display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:14px;border:0;border-top:1px solid var(--line);background:none;color:inherit;text-align:left;font-size:14.5px}
+.group h2 + .person{border-top:0}
+.person-n{flex:none;font-size:12.5px;color:var(--soft)}
+.tbadge{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:800;vertical-align:1px}
+.notes{border-top:1px solid var(--line)}
+.note{padding:8px 0;border-bottom:1px solid var(--line)}
+.note b{font-size:13px}
+.note time{margin-left:8px;font-size:12px;color:var(--soft)}
+.note p{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
 .toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:616px;margin:0 auto;padding:10px 10px 10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.3)}
 .toast button{appearance:none;min-height:40px;padding:0 14px;border:0;border-radius:8px;background:var(--bg);color:var(--ink);font-weight:800}
 .row1{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
@@ -193,7 +218,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2030';
+const VERSION = '20261117-2042';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -211,15 +236,17 @@ function realApi() {
     async signOut() { await sb.auth.signOut(); },
     async load() {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
-      const [members, options, stageDefs, types, typeStages, orders] = await Promise.all([
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes] = await Promise.all([
         sb.from('members').select('*'),
         sb.from('options').select('*').order('sort'),
         sb.from('stage_defs').select('*').order('sort'),
         sb.from('product_types').select('*').order('sort'),
         sb.from('product_type_stages').select('*').order('sort'),
-        sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at')
+        sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
+        sb.from('tasks').select('*').order('created_at'),
+        sb.from('order_notes').select('*').order('created_at')
       ]);
-      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders) };
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes) };
     },
     async createOrder(p) { return ok(await sb.rpc('create_order', { p })); },
     async update(table, id, patch) { ok(await sb.from(table).update(patch).eq('id', id)); },
@@ -230,6 +257,8 @@ function realApi() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'items' }, cb)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'item_stages' }, cb)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks' }, cb)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'order_notes' }, cb)
         .subscribe();
     }
   };
@@ -238,8 +267,8 @@ const api = window.__mockApi || realApi();
 
 /* ---------- state ---------- */
 let me = null;
-let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [] };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, person: null, task: null, showDone: false, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -247,6 +276,9 @@ const e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp
 const day = d => d ? new Date(d).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' }) : '';
 const nameOf = id => (D.members.find(m => m.user_id === id) || {}).name || '';
 const opts = kind => D.options.filter(o => o.kind === kind);
+const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
+const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
+const notesOf = id => D.notes.filter(n => n.order_id === id);
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* ---------- order logic ---------- */
@@ -304,7 +336,8 @@ function cardHtml(o) {
   const badges = [
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
-    o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : ''
+    o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : '',
+    notesOf(o.id).length ? `<span class="badge">Бележки: ${notesOf(o.id).length}</span>` : ''
   ].join('');
   const items = itemsOf(o);
   const done = !!o.waybill_at;
@@ -367,7 +400,11 @@ function bodyHtml(o) {
     <input class="field" id="trk-${o.id}" data-field="tracking" data-id="${o.id}" value="${e(o.tracking)}" inputmode="text" autocomplete="off">
     <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
     <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" autocomplete="off">
+    <span class="lbl">Бележки</span>
+    <div class="notes">${notesOf(o.id).map(n => `<div class="note"><b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
+    <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
     <div class="actions">
+      <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
       <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
       <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
     </div>
@@ -379,7 +416,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || F);
+  const on = !!(UI.open || UI.fopen || UI.task || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -401,6 +438,14 @@ function renderPop() {
     return;
   }
   UI.fopen = false;
+  if (UI.task) {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'task' ? prev.scrollTop : 0;
+    box.innerHTML = taskPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
   const o = UI.open && findOrder(UI.open);
   if (!o) { UI.open = null; box.innerHTML = ''; lockPage(); return; }
   lockPage();
@@ -533,7 +578,8 @@ function viewSettings() {
   const tees = D.types.filter(t => t.is_tshirt).map(t => `<section class="block"><h2><span>${e(t.name)}</span></h2>
     <label class="lbl" for="sz-${t.id}">Размери (със запетая)</label><input class="field" id="sz-${t.id}" data-type="${t.id}" data-list="sizes" value="${e(t.sizes.join(', '))}" autocomplete="off">
     <label class="lbl" for="cl-${t.id}">Цветове (със запетая)</label><input class="field" id="cl-${t.id}" data-type="${t.id}" data-list="colors" value="${e(t.colors.join(', '))}" autocomplete="off"></section>`).join('');
-  return `<div class="top"><h1>Настройки</h1><span>${e(nameOf(me.id))}</span></div>
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Настройки</h1><span>${e(nameOf(me.id))}</span></div>
     <p class="small muted" style="margin-bottom:10px">Екип: ${e(D.members.map(m => m.name).join(', '))}</p>
     ${listBlock('brand', 'Марки')}${listBlock('channel', 'Канали')}${listBlock('account', 'TikTok акаунти на Meivi')}
     <h2 style="margin:18px 0 10px;font-size:16px">Тениски</h2>${tees}
@@ -541,14 +587,133 @@ function viewSettings() {
     <p class="small muted" style="margin-top:14px;text-align:center">Версия ${e(VERSION)}</p>`;
 }
 
+/* ---------- profile & personal tasks ---------- */
+const openTask = t => !t.done_at;
+const taskSort = (a, b) => (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1);
+const myOpenCount = () => D.tasks.filter(t => t.assignee === (me && me.id) && openTask(t)).length;
+
+function taskRow(t) {
+  const late = t.due && !t.done_at && t.due < today();
+  const o = t.order_id && findOrder(t.order_id);
+  const meta = [
+    t.urgent && !t.done_at ? '<span class="badge urgent">Спешна</span>' : '',
+    t.due ? `<span class="${late ? 'late' : ''}">${late ? 'Закъснява · ' : 'до '}${e(day(t.due))}</span>` : '',
+    o ? `<span>Поръчка #${o.num}${o.customer ? ' · ' + e(o.customer) : ''}</span>` : '',
+    t.done_at ? `<span>✓ ${e(nameOf(t.done_by) || '')} · ${e(day(t.done_at))}</span>` : ''
+  ].filter(Boolean).join('');
+  return `<div class="task ${t.done_at ? 'done' : ''}">
+    <button class="tick ${t.done_at ? 'on' : ''}" data-act="task-done" data-id="${t.id}" aria-pressed="${!!t.done_at}" aria-label="${t.done_at ? 'Върни като неизпълнена' : 'Отметни като изпълнена'}">${t.done_at ? '✓' : ''}</button>
+    <button class="task-main" data-act="task-open" data-id="${t.id}"><span class="task-title">${e(t.title)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</button>
+  </div>`;
+}
+function taskGroup(title, list) {
+  if (!list.length) return '';
+  return `<section class="group"><h2>${e(title)}</h2>${list.slice().sort(taskSort).map(taskRow).join('')}</section>`;
+}
+function doneGroup(list) {
+  if (!list.length) return '';
+  const rows = UI.showDone ? list.slice().sort((a, b) => (a.done_at < b.done_at ? 1 : -1)).map(taskRow).join('') : '';
+  return `<section class="group"><button class="group-toggle" data-act="show-done">Изпълнени (${list.length}) <span>${UI.showDone ? 'Скрий' : 'Покажи'}</span></button>${rows}</section>`;
+}
+function tasksOf(uid) {
+  const mine = D.tasks.filter(t => t.assignee === uid);
+  return { open: mine.filter(openTask), done: mine.filter(t => !openTask(t)) };
+}
+
+function viewProfile() {
+  const admin = isAdmin();
+  const settingsBtn = `<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  if (admin && !UI.person) {
+    const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
+    const rows = people.map(m => {
+      const t = tasksOf(m.user_id);
+      const late = t.open.filter(x => x.due && x.due < today()).length;
+      return `<button class="person" data-act="person" data-id="${m.user_id}">
+        <span><b>${e(m.name)}</b>${m.user_id === me.id ? ' <span class="muted">(ти)</span>' : ''}</span>
+        <span class="person-n">${t.open.length ? `${t.open.length} ${t.open.length === 1 ? 'отворена' : 'отворени'}` : 'няма задачи'}${late ? ` · <span class="late">${late} ${late === 1 ? 'закъсняла' : 'закъснели'}</span>` : ''}</span>
+      </button>`;
+    }).join('');
+    return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
+      <section class="group"><h2>Екип</h2>${rows}</section>
+      ${settingsBtn}`;
+  }
+  const uid = admin ? UI.person : me.id;
+  const t = tasksOf(uid);
+  let groups;
+  if (admin) {
+    groups = taskGroup('Отворени задачи', t.open) || '<p class="empty">Няма отворени задачи.</p>';
+  } else {
+    const boss = D.members.find(m => m.is_admin);
+    groups = (taskGroup(`Възложени от ${boss ? boss.name : 'шефа'}`, t.open.filter(x => x.created_by !== me.id)) +
+      taskGroup('Мои', t.open.filter(x => x.created_by === me.id))) || '<p class="empty">Няма отворени задачи.</p>';
+  }
+  return `${admin ? '<button class="link back" data-act="person" data-id="">← Екип</button>' : ''}
+    <div class="top"><h1>${e(admin ? nameOf(uid) : 'Моите задачи')}</h1><button class="fbtn" data-act="task-new">+ Задача</button></div>
+    ${groups}${doneGroup(t.done)}
+    ${admin ? '' : settingsBtn}`;
+}
+
+function taskPopHtml() {
+  const T = UI.task, t = T.id ? D.tasks.find(x => x.id === T.id) : null, d = T.draft, admin = isAdmin();
+  const editable = !t || admin || t.created_by === me.id;
+  const canDelete = t && (admin || (t.created_by === me.id && t.assignee === me.id));
+  const o = d.order_id && findOrder(d.order_id);
+  let body;
+  if (editable) {
+    const orderOpts = activeOrders().slice().sort((a, b) => b.num - a.num);
+    if (o && !orderOpts.includes(o)) orderOpts.unshift(o);
+    body = `<label class="lbl" for="t-title">Задача</label><input class="field" id="t-title" value="${e(d.title)}" autocomplete="off">
+      <label class="lbl" for="t-note">Подробности</label><textarea class="field" id="t-note" rows="3">${e(d.note)}</textarea>
+      ${admin ? `<label class="lbl" for="t-assignee">За кого</label><select class="field" id="t-assignee">${D.members.map(m => `<option value="${m.user_id}" ${d.assignee === m.user_id ? 'selected' : ''}>${e(m.name)}${m.user_id === me.id ? ' (ти)' : ''}</option>`).join('')}</select>` : ''}
+      <label class="lbl" for="t-due">Срок</label><input class="field" id="t-due" type="date" value="${e(d.due || '')}">
+      <label class="lbl" for="t-order">Поръчка</label><select class="field" id="t-order"><option value="">Без поръчка</option>${orderOpts.map(x => `<option value="${x.id}" ${d.order_id === x.id ? 'selected' : ''}>#${x.num}${x.customer ? ' · ' + e(x.customer) : ''}</option>`).join('')}</select>
+      <label class="check"><input type="checkbox" id="t-urgent" ${d.urgent ? 'checked' : ''}>Спешна</label>
+      <p class="err" role="alert">${e(T.err || '')}</p>
+      <div class="actions"><button class="btn" data-act="task-save">${t ? 'Запази' : 'Добави задачата'}</button>
+        ${t ? `<button class="btn ghost" data-act="task-done" data-id="${t.id}">${t.done_at ? 'Върни като неизпълнена' : 'Изпълнена'}</button>` : ''}</div>
+      ${canDelete ? `<div class="actions"><button class="btn danger" data-act="task-del" data-id="${t.id}">${UI.armed === 'task:' + t.id ? 'Натисни пак, за да изтриеш' : 'Изтрий задачата'}</button></div>` : ''}`;
+  } else {
+    body = `<h3 class="task-h">${e(t.title)}</h3>
+      ${t.note ? `<p class="task-note">${e(t.note)}</p>` : ''}
+      <p class="task-meta" style="margin-top:10px">${t.urgent ? '<span class="badge urgent">Спешна</span>' : ''}${t.due ? `<span>Срок ${e(day(t.due))}</span>` : ''}</p>
+      ${o ? `<button class="btn ghost" data-act="open" data-id="${o.id}" style="margin-top:12px">Поръчка #${o.num}${o.customer ? ' · ' + e(o.customer) : ''}</button>` : ''}
+      <div class="actions"><button class="btn" data-act="task-done" data-id="${t.id}">${t.done_at ? 'Върни като неизпълнена' : 'Изпълнена'}</button></div>`;
+  }
+  const foot = t ? `<p class="small muted" style="margin-top:12px">Възложена от ${e(nameOf(t.created_by) || '—')} на ${e(day(t.created_at))}${t.done_at ? ` · изпълнена от ${e(nameOf(t.done_by))} на ${e(day(t.done_at))}` : ''}</p>` : '';
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="task" role="dialog" aria-modal="true" aria-label="${t ? 'Задача' : 'Нова задача'}">
+    <div class="pop-head"><b class="who">${t ? 'Задача' : 'Нова задача'}${!t && admin ? '' : ''}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">${body}${foot}</div></div></div>`;
+}
+function startTask(id, preset) {
+  const t = id && D.tasks.find(x => x.id === id);
+  UI.task = { id: t ? t.id : null, err: '', draft: t
+    ? { title: t.title, note: t.note, due: t.due || '', urgent: t.urgent, assignee: t.assignee, order_id: t.order_id || '' }
+    : Object.assign({ title: '', note: '', due: '', urgent: false, assignee: me.id, order_id: '' }, preset || {}) };
+  renderPop();
+  if (!t) setTimeout(() => { const f = $('#t-title'); if (f) f.focus(); }, 50);
+}
+async function saveTask() {
+  const T = UI.task, d = T.draft;
+  if (!d.title.trim()) { T.err = 'Напиши какво трябва да се направи.'; return renderPop(); }
+  const row = { title: d.title.trim(), note: d.note.trim(), due: d.due || null, urgent: !!d.urgent, order_id: d.order_id || null };
+  if (isAdmin()) row.assignee = d.assignee || me.id;
+  try {
+    if (T.id) await api.update('tasks', T.id, row);
+    else await api.insert('tasks', Object.assign({ assignee: me.id }, row));
+    UI.task = null;
+    await refresh(true);
+  } catch (x) { T.err = 'Не успях да запазя задачата. Провери интернета и опитай пак.'; renderPop(); }
+}
+
 function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, settings: viewSettings }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v ? 'aria-current="page"' : ''}>${l}</button>`;
-  app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('settings', 'Настройки')}</div></nav>
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && UI.tab === 'settings') ? 'aria-current="page"' : ''}>${l}</button>`;
+  const mine = myOpenCount();
+  app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
-    <button class="fab" data-act="new">+ Нова поръчка</button>`;
+    ${['orders', 'summary', 'done'].includes(UI.tab) ? '<button class="fab" data-act="new">+ Нова поръчка</button>' : ''}`;
   renderPop();
 }
 
@@ -710,22 +875,44 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; render(); lockY = null; return window.scrollTo(0, 0);
+    case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
-    case 'open': UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; UI.fopen = false; return renderPop();
+    case 'open': UI.task = null; UI.open = id; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
+    case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
+    case 'show-done': UI.showDone = !UI.showDone; return render();
+    case 'task-new': return startTask(null, b.dataset.order ? { order_id: b.dataset.order } : (isAdmin() && UI.person ? { assignee: UI.person } : {}));
+    case 'task-open': return startTask(id);
+    case 'task-save': return saveTask();
+    case 'task-done': {
+      const t = D.tasks.find(x => x.id === id); if (!t) return;
+      const p = stamp(t.done_at);
+      if (p.at && !undo) toast('Задачата е изпълнена', 'task-done', id);
+      if (UI.task) UI.task = null;
+      return act(() => api.update('tasks', id, { done_at: p.at, done_by: p.by }));
+    }
+    case 'task-del':
+      if (UI.armed !== 'task:' + id) { UI.armed = 'task:' + id; return renderPop(); }
+      UI.armed = null; UI.task = null;
+      return act(() => api.remove('tasks', id));
+    case 'note-add': {
+      const f = $(`#nt-${id}`), body = f ? f.value.trim() : '';
+      if (!body) return;
+      f.value = '';
+      return act(() => api.insert('order_notes', { order_id: id, body }));
+    }
     case 'logout': await api.signOut(); me = null; return render();
     case 'stage': {
       // Stages are a sequence: finishing one also finishes the ones before it,
@@ -796,10 +983,15 @@ document.addEventListener('click', async ev => {
 document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', ev => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
-  if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
+  if (ev.key === 'Escape' && UI.task) { UI.task = null; renderPop(); }
+  else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (UI.task) {
+    const k = { 't-title': 'title', 't-note': 'note', 't-due': 'due' }[t.id];
+    if (k) { UI.task.draft[k] = t.value; return; }
+  }
   if (!F) return;
   const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-note': 'note', 'f-due': 'due' };
   if (map[t.id]) F[map[t.id]] = t.value;
@@ -809,6 +1001,12 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (UI.task) {
+    if (t.id === 't-urgent') { UI.task.draft.urgent = t.checked; return; }
+    if (t.id === 't-order') { UI.task.draft.order_id = t.value; return; }
+    if (t.id === 't-assignee') { UI.task.draft.assignee = t.value; return; }
+    if (t.id === 't-due') { UI.task.draft.due = t.value; return; }
+  }
   if (F) {
     if (t.id === 'f-type') { const keep = F.edit.qty; F.edit = blankItem(); F.edit.typeId = t.value; F.edit.qty = keep; return renderForm(); }
     if (t.id === 'f-urgent') { F.urgent = t.checked; return; }
