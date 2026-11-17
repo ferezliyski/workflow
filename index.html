@@ -106,7 +106,6 @@ a{color:var(--ink)}
 .lines li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
 .lines em{flex:none;font-style:normal;font-weight:700;color:var(--soft)}
 .card-body{padding:2px 16px 18px}
-body.locked{overflow:hidden}
 .pop{position:fixed;inset:0;z-index:9;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6)}
 .pop-in{width:100%;max-width:640px;max-height:88%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;background:var(--surface);border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom, 0px)}
 .pop-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px 12px 16px;background:var(--band);color:var(--on-band)}
@@ -188,7 +187,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-1959';
+const VERSION = '20261117-2001';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -370,11 +369,26 @@ function bodyHtml(o) {
   </div>`;
 }
 
+// Freeze the page behind a popup or the form. iPhones ignore overflow:hidden on the body,
+// so the body is pinned in place and its scroll position restored on close.
+let lockY = null;
+function lockPage() {
+  const on = !!(UI.open || F);
+  const st = document.body.style;
+  if (on && lockY === null) {
+    lockY = window.scrollY;
+    st.position = 'fixed'; st.top = `-${lockY}px`; st.left = '0'; st.right = '0';
+  } else if (!on && lockY !== null) {
+    st.position = ''; st.top = ''; st.left = ''; st.right = '';
+    window.scrollTo(0, lockY);
+    lockY = null;
+  }
+}
 function renderPop() {
   const box = $('#pop');
   const o = UI.open && findOrder(UI.open);
-  document.body.classList.toggle('locked', !!o);
-  if (!o) { UI.open = null; box.innerHTML = ''; return; }
+  if (!o) { UI.open = null; box.innerHTML = ''; lockPage(); return; }
+  lockPage();
   const prev = box.querySelector('.pop-in');
   const keepY = prev ? prev.scrollTop : 0;
   const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
@@ -463,7 +477,7 @@ function viewSettings() {
 
 function render() {
   const app = $('#app');
-  if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; document.body.classList.remove('locked'); return; }
+  if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   const view = { orders: viewOrders, summary: viewSummary, done: viewDone, settings: viewSettings }[UI.tab]();
   const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v ? 'aria-current="page"' : ''}>${l}</button>`;
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('settings', 'Настройки')}</div></nav>
@@ -477,7 +491,6 @@ const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, cu
 function openForm() {
   F = { customer: '', phone: '', address: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
   renderForm();
-  window.scrollTo(0, 0);
 }
 const typeOf = id => D.types.find(t => t.id === id);
 function draftStages(it) {
@@ -514,6 +527,7 @@ function editorHtml() {
 }
 function renderForm() {
   const sheet = $('#sheet');
+  lockPage();
   if (!F) { sheet.innerHTML = ''; return; }
   // keep the scroll position: redrawing the form must not jump back to the top
   const prev = sheet.querySelector('.sheet');
@@ -635,7 +649,7 @@ document.addEventListener('click', async ev => {
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.tab = v; UI.open = null; render(); return window.scrollTo(0, 0);
+    case 'tab': UI.tab = v; UI.open = null; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.open = id; return renderPop();
@@ -708,6 +722,7 @@ document.addEventListener('click', async ev => {
   }
 });
 
+document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', ev => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
   if (ev.key === 'Escape' && UI.open) { UI.open = null; renderPop(); }
