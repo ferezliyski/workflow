@@ -188,7 +188,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-1955';
+const VERSION = '20261117-1959';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -288,7 +288,7 @@ function viewAuth() {
 }
 
 function nowRow(label, kind, act, id, btn) {
-  return `<div class="now"><p class="now-txt"><span>${kind === 'wait' ? 'Чака' : 'Сега'}</span><b>${e(label)}</b></p>
+  return `<div class="now"><p class="now-txt"><span>${kind === 'wait' ? 'Чака' : 'За'}</span><b>${e(label)}</b></p>
     <button class="go ${kind === 'wait' ? 'wait' : ''}" data-act="${act}" data-id="${id}">${e(btn)}</button></div>`;
 }
 function dots(it) {
@@ -311,14 +311,14 @@ function cardHtml(o) {
     else if (unconfirmed(o)) action = '';
     else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
     else if (st.code === 'ready') action = allReady ? '' : '<p class="ready">✓ Готов</p>';
-    else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Готово');
+    else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
     return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
   }).join('');
   let orderRow = '';
   if (done) orderRow = `<p class="ready">✓ Изпратена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
-  else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Готово');
-  else if (allReady) orderRow = nowRow('Товарителница', 'work', 'waybill', o.id, 'Готово') +
+  else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
+  else if (allReady) orderRow = nowRow('Писане на товарителница', 'work', 'waybill', o.id, 'Готово') +
     ((o.address || o.phone) ? `<p class="ship">${e([o.customer, o.phone, o.address].filter(Boolean).join(' · '))}</p>` : '<p class="ship muted">Няма въведен адрес. Добави го от „Още“.</p>');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
