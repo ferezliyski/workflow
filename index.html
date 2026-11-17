@@ -193,7 +193,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2027';
+const VERSION = '20261117-2030';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -239,7 +239,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [] };
-const UI = { tab: 'orders', filter: 'all', prod: 'all', sub: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -419,7 +419,13 @@ function renderPop() {
 const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
 const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
 function filterData() {
-  const all = activeOrders();
+  const everything = activeOrders();
+  // store filter first; everything below is counted within the chosen store
+  const brandCounts = {};
+  everything.forEach(o => { if (o.brand) brandCounts[o.brand] = (brandCounts[o.brand] || 0) + 1; });
+  const brands = [...opts('brand').map(x => x.value).filter(v => brandCounts[v]), ...Object.keys(brandCounts).filter(v => !opts('brand').some(x => x.value === v))];
+  if (UI.brand !== 'all' && !brandCounts[UI.brand]) UI.brand = 'all';
+  const all = UI.brand === 'all' ? everything : everything.filter(o => o.brand === UI.brand);
   const rank = n => { const i = D.types.findIndex(t => (t.grp || t.name) === n); return i < 0 ? 99 : i; };
   const prodCounts = {};
   all.forEach(o => [...new Set(itemsOf(o).map(groupOf))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
@@ -439,7 +445,7 @@ function filterData() {
   const tags = Object.keys(counts).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   if (UI.filter !== 'all' && !counts[UI.filter]) UI.filter = 'all';
   const shown = UI.filter === 'all' ? list : list.filter(o => orderTags(o).includes(UI.filter));
-  return { all, prods, prodCounts, inGroup, subs, subCounts, hasSubs, list, tags, counts, shown };
+  return { everything, brands, brandCounts, all, prods, prodCounts, inGroup, subs, subCounts, hasSubs, list, tags, counts, shown };
 }
 
 function filterPopHtml() {
@@ -448,6 +454,8 @@ function filterPopHtml() {
   return `<div class="pop" data-act="close-pop"><div class="pop-in" role="dialog" aria-modal="true" aria-label="Филтри">
     <div class="pop-head"><b class="who">Филтри</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
     <div class="card-body">
+      <span class="lbl">Магазин</span>
+      <div class="chips">${chip('brand', UI.brand, 'all', 'Всички', f.everything.length)}${f.brands.map(n => chip('brand', UI.brand, n, n, f.brandCounts[n])).join('')}</div>
       <span class="lbl">Продукт</span>
       <div class="chips">${chip('prod', UI.prod, 'all', 'Всички', f.all.length)}${f.prods.map(n => chip('prod', UI.prod, n, n, f.prodCounts[n])).join('')}</div>
       ${UI.prod !== 'all' && f.hasSubs ? `<span class="lbl">Вид ${e(UI.prod.toLowerCase())}</span>
@@ -456,7 +464,7 @@ function filterPopHtml() {
       <div class="chips">${chip('filter', UI.filter, 'all', 'Всички', f.list.length)}${f.tags.map(t => chip('filter', UI.filter, t, t, f.counts[t])).join('')}</div>
       <div class="actions">
         <button class="btn" data-act="close-pop" data-x="1">Покажи ${f.shown.length} ${f.shown.length === 1 ? 'поръчка' : 'поръчки'}</button>
-        ${UI.prod !== 'all' || UI.filter !== 'all' ? '<button class="btn ghost" data-act="f-clear">Изчисти</button>' : ''}
+        ${UI.brand !== 'all' || UI.prod !== 'all' || UI.filter !== 'all' ? '<button class="btn ghost" data-act="f-clear">Изчисти</button>' : ''}
       </div>
     </div>
   </div></div>`;
@@ -464,12 +472,12 @@ function filterPopHtml() {
 
 function viewOrders() {
   const f = filterData();
-  const active = (UI.prod !== 'all') + (UI.filter !== 'all');
-  const which = [UI.sub !== 'all' ? UI.sub : UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
+  const active = (UI.brand !== 'all') + (UI.prod !== 'all') + (UI.filter !== 'all');
+  const which = [UI.brand, UI.sub !== 'all' ? UI.sub : UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
   return `<div class="top"><h1>Поръчки</h1>
       <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></div>
-    ${active ? `<p class="fnow">${e(which)} · ${f.shown.length} от ${f.all.length} <button class="link" data-act="f-clear">Изчисти</button></p>` : ''}
-    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.all.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
+    ${active ? `<p class="fnow">${e(which)} · ${f.shown.length} от ${f.everything.length} <button class="link" data-act="f-clear">Изчисти</button></p>` : ''}
+    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
 }
 
 function viewSummary() {
@@ -709,13 +717,14 @@ document.addEventListener('click', async ev => {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
     case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
+    case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
-    case 'f-clear': UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
+    case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
     case 'logout': await api.signOut(); me = null; return render();
     case 'stage': {
