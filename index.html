@@ -99,6 +99,8 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 a{color:var(--ink)}
 .ready{margin-top:6px;font-weight:700;color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
+.phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
+.phone-row .link{padding:4px 0;font-size:13px}
 .star{margin-left:5px;color:#E0A100}
 .prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
 .prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
@@ -239,7 +241,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2114';
+const VERSION = '20261117-2118';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -293,7 +295,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', editPhone: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -427,7 +429,10 @@ function bodyHtml(o) {
   }).join('');
   const armed = UI.armed === o.id;
   return `<div class="card-body">
-    ${o.phone ? `<p class="small" style="margin-top:12px">Телефон: <a href="tel:${e(o.phone)}">${e(o.phone)}</a></p>` : ''}
+    ${UI.editPhone === o.id
+      ? `<label class="lbl" for="ph-${o.id}">Телефон</label><div class="inline"><input class="field" id="ph-${o.id}" data-field="phone" data-id="${o.id}" type="tel" value="${e(o.phone)}" autocomplete="off"><button class="btn" data-act="phone-done" data-id="${o.id}">Запази</button></div>`
+      : `<p class="phone-row">${o.phone ? `Телефон: <a href="tel:${e(o.phone.replace(/[^\d+]/g, ''))}">${e(o.phone)}</a>` : '<span class="muted">Няма телефон</span>'}
+        <button class="link" data-act="phone-edit" data-id="${o.id}">${o.phone ? 'Редактирай' : 'Добави'}</button></p>`}
     ${otherOrders(o).length ? `<div class="prev"><p class="prev-h">★ Други поръчки на клиента</p>${otherOrders(o).map(h => {
       const st = h.waybill_at ? `Изпратена ${e(day(h.waybill_at))}${h.tracking ? ' · ' + e(h.tracking) : ''}` : 'Активна';
       const inner = `<b>#${h.num}</b> · ${e(day(h.created_at))} · ${st}${h.price != null ? ' · ' + e(money(h.price)) : ''}`;
@@ -1052,7 +1057,7 @@ document.addEventListener('click', async ev => {
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
-    case 'open': UI.task = null; UI.open = id; return renderPop();
+    case 'open': UI.task = null; UI.editPhone = null; UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'search':
@@ -1062,6 +1067,13 @@ document.addEventListener('click', async ev => {
     case 'search-x': UI.searching = false; UI.q = ''; return render();
     case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
+    case 'phone-edit':
+      UI.editPhone = id; renderPop();
+      return setTimeout(() => { const f = $(`#ph-${id}`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }, 30);
+    case 'phone-done': {
+      const f = $(`#ph-${id}`); UI.editPhone = null;
+      return act(() => api.update('orders', id, { phone: f ? f.value.trim() : '' }));
+    }
     case 'stats-period': UI.statsPeriod = v; return render();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
     case 'show-done': UI.showDone = !UI.showDone; return render();
@@ -1189,6 +1201,7 @@ document.addEventListener('change', ev => {
     return;
   }
   if (t.dataset.field === 'price') { const v = parsePrice(t.value); t.value = priceInput(v); return act(() => api.update('orders', t.dataset.id, { price: v })); }
+  if (t.dataset.field === 'phone') { UI.editPhone = null; return act(() => api.update('orders', t.dataset.id, { phone: t.value.trim() })); }
   if (t.dataset.field) return act(() => api.update('orders', t.dataset.id, { [t.dataset.field]: t.value.trim() }));
   if (t.dataset.type) {
     const list = [...new Set(t.value.split(',').map(s => s.trim()).filter(Boolean))];
