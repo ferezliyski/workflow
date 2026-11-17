@@ -189,7 +189,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2014';
+const VERSION = '20261117-2019';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -235,7 +235,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [] };
-const UI = { tab: 'orders', filter: 'all', open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', prod: 'all', open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -403,17 +403,28 @@ function renderPop() {
 }
 
 function viewOrders() {
-  const list = activeOrders();
+  const all = activeOrders();
+  // product filter: which product kinds appear in the active orders
+  const typeOrder = D.types.map(t => t.name);
+  const prodCounts = {};
+  all.forEach(o => [...new Set(itemsOf(o).map(it => it.name))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
+  const prods = Object.keys(prodCounts).sort((a, b) => (typeOrder.indexOf(a) + 1 || 99) - (typeOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
+  if (UI.prod !== 'all' && !prodCounts[UI.prod]) UI.prod = 'all';
+  const list = UI.prod === 'all' ? all : all.filter(o => itemsOf(o).some(it => it.name === UI.prod));
+  // stage filter, counted within the chosen product
   const counts = {};
   list.forEach(o => orderTags(o).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
   const order = ['Чака клиента', ...D.stageDefs.map(s => s.name), 'На снимане', 'За опаковане', 'За товарителница'];
   const tags = Object.keys(counts).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   if (UI.filter !== 'all' && !counts[UI.filter]) UI.filter = 'all';
   const shown = UI.filter === 'all' ? list : list.filter(o => orderTags(o).includes(UI.filter));
-  const chip = (v, label, n) => `<button class="chip" data-act="filter" data-v="${e(v)}" aria-pressed="${UI.filter === v}">${e(label)}<span class="n">${n}</span></button>`;
-  return `<div class="top"><h1>Поръчки</h1><span>${list.length} активни</span></div>
-    <div class="scroll">${chip('all', 'Всички', list.length)}${tags.map(t => chip(t, t, counts[t])).join('')}</div>
-    ${shown.length ? shown.map(cardHtml).join('') : `<p class="empty">${list.length ? 'Няма поръчки в този етап.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
+  const chip = (act, cur, v, label, n) => `<button class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(label)}<span class="n">${n}</span></button>`;
+  const prodRow = prods.length > 1
+    ? `<div class="scroll">${chip('prod', UI.prod, 'all', 'Всички продукти', all.length)}${prods.map(n => chip('prod', UI.prod, n, n, prodCounts[n])).join('')}</div>` : '';
+  return `<div class="top"><h1>Поръчки</h1><span>${all.length} активни</span></div>
+    ${prodRow}
+    <div class="scroll">${chip('filter', UI.filter, 'all', 'Всички етапи', list.length)}${tags.map(t => chip('filter', UI.filter, t, t, counts[t])).join('')}</div>
+    ${shown.length ? shown.map(cardHtml).join('') : `<p class="empty">${all.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
 }
 
 function viewSummary() {
@@ -653,6 +664,7 @@ document.addEventListener('click', async ev => {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
     case 'tab': UI.tab = v; UI.open = null; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
+    case 'prod': UI.prod = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; return renderPop();
