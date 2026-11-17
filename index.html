@@ -45,6 +45,9 @@ h1,h2,h3,p{margin:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .fbtn{appearance:none;min-height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:13px}
 .fbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.top-btns{display:flex;gap:8px}
+.search{display:flex;align-items:center;gap:8px;margin:-2px 0 12px}
+.search .field{flex:1}
 .fnow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:-4px 0 12px;font-size:13px;color:var(--soft)}
 .fnow .link{padding:4px 2px;font-size:13px}
 .top h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
@@ -218,7 +221,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2042';
+const VERSION = '20261117-2105';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -248,6 +251,9 @@ function realApi() {
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes) };
     },
+    async loadAll() {
+      return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
+    },
     async createOrder(p) { return ok(await sb.rpc('create_order', { p })); },
     async update(table, id, patch) { ok(await sb.from(table).update(patch).eq('id', id)); },
     async insert(table, row) { ok(await sb.from(table).insert(row)); },
@@ -268,7 +274,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, person: null, task: null, showDone: false, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -279,6 +285,14 @@ const opts = kind => D.options.filter(o => o.kind === kind);
 const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
 const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
 const notesOf = id => D.notes.filter(n => n.order_id === id);
+const money = v => v == null || v === '' ? '' : `${Number(v).toFixed(2).replace('.', ',')} €`;
+const priceInput = v => v == null ? '' : String(v).replace('.', ',');
+function parsePrice(v) {
+  const t = String(v || '').trim().replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '');
+  if (!t) return null;
+  const n = Number(t);
+  return isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
 const today = () => new Date().toISOString().slice(0, 10);
 
 /* ---------- order logic ---------- */
@@ -357,7 +371,7 @@ function cardHtml(o) {
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
   else if (allReady) orderRow = nowRow('Писане на товарителница', 'work', 'waybill', o.id, 'Готово') +
-    ((o.address || o.phone) ? `<p class="ship">${e([o.customer, o.phone, o.address].filter(Boolean).join(' · '))}</p>` : '');
+    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([o.customer, o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}</span><span class="src">${e(src)}</span></div>
@@ -389,6 +403,8 @@ function bodyHtml(o) {
     ${o.phone ? `<p class="small" style="margin-top:12px">Телефон: <a href="tel:${e(o.phone)}">${e(o.phone)}</a></p>` : ''}
     <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
+    <label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
+    <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">
     ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
     ${o.needs_confirm ? `<div class="steps" style="margin-top:12px">${stepBtn('confirm', o.id, 'Клиентът потвърди по телефона', o.confirmed_at, o.confirmed_by, 'wait')}</div>` : ''}
     ${items}
@@ -515,14 +531,56 @@ function filterPopHtml() {
   </div></div>`;
 }
 
+let allOrders = null, allLoading = false;
+async function loadAllOrders() {
+  if (allLoading) return;
+  allLoading = true;
+  try { allOrders = await api.loadAll(); } catch (x) { /* fall back to what is loaded */ }
+  allLoading = false;
+  if (UI.searching) updateResults();
+}
+function searchPool() {
+  const map = new Map((allOrders || []).map(o => [o.id, o]));
+  D.orders.forEach(o => map.set(o.id, o));
+  return [...map.values()];
+}
+const norm = v => String(v == null ? '' : v).toLowerCase();
+function haystack(o) {
+  const parts = [o.num, '#' + o.num, o.customer, o.phone, String(o.phone || '').replace(/\D/g, ''), o.address,
+    o.price != null ? priceInput(o.price) + ' ' + o.price : '', o.brand, o.channel, o.account, o.note, o.problem, o.tracking,
+    ...(o.items || []).map(it => [it.name, it.size, it.color, it.note].join(' ')),
+    ...notesOf(o.id).map(n => n.body)];
+  return norm(parts.join(' '));
+}
+function searchOrders(q) {
+  const terms = norm(q).split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  return searchPool().filter(o => { const h = haystack(o); return terms.every(t => h.includes(t)); })
+    .sort((a, b) => (!!a.waybill_at - !!b.waybill_at) || (b.num - a.num));
+}
+function resultsHtml() {
+  const list = searchOrders(UI.q);
+  const head = `<p class="fnow">${list.length ? `${list.length} ${list.length === 1 ? 'резултат' : 'резултата'}` : 'Нищо не е намерено.'}${allOrders ? '' : ' Търся и в по-старите поръчки…'}</p>`;
+  return head + list.map(cardHtml).join('');
+}
+function updateResults() {
+  const box = $('#olist');
+  if (box && UI.searching && UI.q.trim()) box.innerHTML = resultsHtml();
+  else if (box && UI.searching) render();
+}
+
 function viewOrders() {
   const f = filterData();
   const active = (UI.brand !== 'all') + (UI.prod !== 'all') + (UI.filter !== 'all');
   const which = [UI.brand, UI.sub !== 'all' ? UI.sub : UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
-  return `<div class="top"><h1>Поръчки</h1>
-      <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></div>
+  const searching = UI.searching && UI.q.trim();
+  return `<div class="top"><h1>Поръчки</h1><span class="top-btns">
+      <button class="fbtn ${UI.searching ? 'on' : ''}" data-act="search">Търси</button>
+      <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></span></div>
+    ${UI.searching ? `<div class="search"><input class="field" id="q" type="search" value="${e(UI.q)}" placeholder="Име, телефон, адрес, номер, продукт…" autocomplete="off" enterkeyhint="search"><button class="link" data-act="search-x">Затвори</button></div>` : ''}
+    <div id="olist">${searching ? resultsHtml() : `
     ${active ? `<p class="fnow">${e(which)} · ${f.shown.length} от ${f.everything.length} <button class="link" data-act="f-clear">Изчисти</button></p>` : ''}
-    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
+    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`}</div>`;
 }
 
 function viewSummary() {
@@ -720,7 +778,7 @@ function render() {
 /* ---------- new order form ---------- */
 const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, custom: false, note: '', stages: [], extra: '' });
 function openForm() {
-  F = { customer: '', phone: '', address: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
+  F = { customer: '', phone: '', address: '', price: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
   renderForm();
 }
 const typeOf = id => D.types.find(t => t.id === id);
@@ -771,6 +829,7 @@ function renderForm() {
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
     <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
     <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
+    <label class="lbl" for="f-price">Цена (наложен платеж), €</label><input class="field" id="f-price" inputmode="decimal" value="${e(F.price)}" autocomplete="off">
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
@@ -809,7 +868,7 @@ async function saveOrder() {
   F.busy = true; F.err = ''; renderForm();
   try {
     await api.createOrder({
-      customer: F.customer.trim(), phone: F.phone.trim(), address: F.address.trim(), brand: F.brand, channel: F.channel,
+      customer: F.customer.trim(), phone: F.phone.trim(), address: F.address.trim(), price: parsePrice(F.price) == null ? '' : String(parsePrice(F.price)), brand: F.brand, channel: F.channel,
       account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
       note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
       items: F.items.map(it => ({
@@ -880,7 +939,7 @@ document.addEventListener('click', async ev => {
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
+    case 'tab': if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
@@ -889,6 +948,11 @@ document.addEventListener('click', async ev => {
     case 'open': UI.task = null; UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
+    case 'search':
+      if (UI.searching) { UI.searching = false; UI.q = ''; return render(); }
+      UI.searching = true; render(); loadAllOrders();
+      return setTimeout(() => { const q = $('#q'); if (q) q.focus(); }, 30);
+    case 'search-x': UI.searching = false; UI.q = ''; return render();
     case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
@@ -988,12 +1052,13 @@ document.addEventListener('keydown', ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (t.id === 'q') { UI.q = t.value; return updateResults(); }
   if (UI.task) {
     const k = { 't-title': 'title', 't-note': 'note', 't-due': 'due' }[t.id];
     if (k) { UI.task.draft[k] = t.value; return; }
   }
   if (!F) return;
-  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-note': 'note', 'f-due': 'due' };
+  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-price': 'price', 'f-note': 'note', 'f-due': 'due' };
   if (map[t.id]) F[map[t.id]] = t.value;
   else if (t.id === 'f-name') F.edit.name = t.value;
   else if (t.id === 'f-inote') F.edit.note = t.value;
@@ -1014,6 +1079,7 @@ document.addEventListener('change', ev => {
     if (t.id === 'f-custom') { F.edit.custom = t.checked; return; }
     return;
   }
+  if (t.dataset.field === 'price') { const v = parsePrice(t.value); t.value = priceInput(v); return act(() => api.update('orders', t.dataset.id, { price: v })); }
   if (t.dataset.field) return act(() => api.update('orders', t.dataset.id, { [t.dataset.field]: t.value.trim() }));
   if (t.dataset.type) {
     const list = [...new Set(t.value.split(',').map(s => s.trim()).filter(Boolean))];
