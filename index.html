@@ -245,7 +245,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2203';
+const VERSION = '20261117-2206';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -318,7 +318,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -564,7 +564,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || UI.task || F);
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -586,6 +586,15 @@ function renderPop() {
     return;
   }
   UI.fopen = false;
+  if (UI.workPerson && UI.tab === 'work') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'work' ? prev.scrollTop : 0;
+    box.innerHTML = workPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.workPerson = null;
   if (UI.task) {
     const prev = box.querySelector('.pop-in');
     const keepY = prev && prev.dataset.kind === 'task' ? prev.scrollTop : 0;
@@ -857,33 +866,46 @@ async function loadWork() {
   } catch (x) { UI.work = { key, loading: false, rows: null, err: 'Не успях да заредя данните. Провери интернета и опитай пак.' }; }
   if (UI.tab === 'work') render();
 }
-function viewWork() {
-  const W = UI.work;
-  const seg = WORK_PERIODS.map(([v, l]) => `<button class="chip" data-act="work-period" data-v="${v}" aria-pressed="${UI.workPeriod === v}">${l}</button>`).join('');
-  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
-    <div class="top"><h1>Работа по хора</h1></div>
-    <div class="chips" style="margin-bottom:14px">${seg}</div>`;
-  if (!W || (W.loading && !W.rows)) return head + '<p class="empty">Зареждам…</p>';
-  if (W.err) return head + `<p class="empty">${e(W.err)}</p>`;
-  // order of rows: production stages as they run, then order-level steps
-  const stageOrder = D.stageDefs.map(x => x.name);
+function workRowsOf(uid) {
+  const W = UI.work, stageOrder = D.stageDefs.map(x => x.name);
   const kindOrder = ['stage', 'pack', 'waybill', 'confirm', 'created', 'task'];
   const rank = r => kindOrder.indexOf(r.kind) * 1000 + (r.kind === 'stage' ? (stageOrder.indexOf(r.label) + 1 || 999) : 0);
-  const val = r => r.kind === 'stage' ? Number(r.qty) : Number(r.n);
-  const maxBy = {};
-  W.rows.forEach(r => { const k = r.kind + '|' + r.label; maxBy[k] = Math.max(maxBy[k] || 0, val(r)); });
+  return (W && W.rows ? W.rows : []).filter(r => r.user_id === uid).sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+}
+const workVal = r => r.kind === 'stage' ? Number(r.qty) : Number(r.n);
+const workTxt = r => `${workVal(r)}${r.kind === 'stage' ? ' бр.' : ''}`;
+const workSeg = () => WORK_PERIODS.map(([v, l]) => `<button class="chip" data-act="work-period" data-v="${v}" aria-pressed="${UI.workPeriod === v}">${l}</button>`).join('');
+function viewWork() {
+  const W = UI.work;
+  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Работа по хора</h1></div>
+    <div class="chips" style="margin-bottom:14px">${workSeg()}</div>`;
+  if (!W || (W.loading && !W.rows)) return head + '<p class="empty">Зареждам…</p>';
+  if (W.err) return head + `<p class="empty">${e(W.err)}</p>`;
   const people = D.members.slice().sort((a, b) => a.name.localeCompare(b.name));
-  const blocks = people.map(m => {
-    const mine = W.rows.filter(r => r.user_id === m.user_id).sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
-    const body = mine.length ? `<div class="bars">${mine.map(r => {
-      const v = val(r), max = maxBy[r.kind + '|' + r.label] || 1;
-      return `<div class="bar-row"><span class="bar-l">${e(r.label)}</span><span class="bar-v">${v}${r.kind === 'stage' ? ' бр.' : ''}</span>
-        <span class="bar-t"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span></div>`;
-    }).join('')}</div>` : '<p class="small muted" style="margin-top:8px">Няма отбелязана работа за този период.</p>';
-    return `<section class="block"><h2><span>${e(m.name)}</span></h2>${body}</section>`;
+  const rows = people.map(m => {
+    const mine = workRowsOf(m.user_id);
+    const pieces = mine.filter(r => r.kind === 'stage').reduce((x, r) => x + workVal(r), 0);
+    const orders = mine.filter(r => r.kind === 'pack' || r.kind === 'waybill').reduce((x, r) => x + workVal(r), 0);
+    const sum = mine.length ? [pieces ? `${pieces} бр. по етапи` : '', orders ? `${orders} опаковани/изпратени` : ''].filter(Boolean).join(' · ') || `${mine.reduce((x, r) => x + workVal(r), 0)} отметки` : 'няма отбелязана работа';
+    return `<button class="person" data-act="work-person" data-id="${m.user_id}"><span><b>${e(m.name)}</b></span><span class="person-n">${e(sum)}</span></button>`;
   }).join('');
-  return head + `${W.loading ? '<p class="fnow">Обновявам…</p>' : ''}${blocks}
-    <p class="small muted" style="margin-top:6px">Етапите се броят в бройки (2 тениски в един ред са 2). Чертата показва човека спрямо най-добрия в екипа за същото. Когато някой отбележи по-късен етап, по-ранните неотбелязани етапи също се записват на него.</p>`;
+  return head + `${W.loading ? '<p class="fnow">Обновявам…</p>' : ''}<section class="group"><h2>Екип</h2>${rows}</section>`;
+}
+function workPopHtml() {
+  const uid = UI.workPerson, mine = workRowsOf(uid), W = UI.work;
+  const maxBy = {};
+  (W && W.rows ? W.rows : []).forEach(r => { const k = r.kind + '|' + r.label; maxBy[k] = Math.max(maxBy[k] || 0, workVal(r)); });
+  const body = W && W.loading && !W.rows ? '<p class="empty">Зареждам…</p>'
+    : mine.length ? `<div class="bars">${mine.map(r => {
+        const v = workVal(r), max = maxBy[r.kind + '|' + r.label] || 1;
+        return `<div class="bar-row"><span class="bar-l">${e(r.label)}</span><span class="bar-v">${e(workTxt(r))}</span>
+          <span class="bar-t"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span></div>`;
+      }).join('')}</div>` : '<p class="small muted" style="margin-top:8px">Няма отбелязана работа за този период.</p>';
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="work" role="dialog" aria-modal="true" aria-label="${e(nameOf(uid))}">
+    <div class="pop-head"><b class="who">${e(nameOf(uid))}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body"><div class="chips" style="margin-top:12px">${workSeg()}</div>${body}</div>
+  </div></div>`;
 }
 
 /* ---------- profile & personal tasks ---------- */
@@ -1279,7 +1301,7 @@ document.addEventListener('click', async ev => {
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': if (v === 'work' && isAdmin()) setTimeout(loadWork, 0);
+    case 'tab': UI.workPerson = null; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
@@ -1287,7 +1309,7 @@ document.addEventListener('click', async ev => {
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.itemEdit = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'search':
       if (UI.searching) { UI.searching = false; UI.q = ''; return render(); }
@@ -1329,6 +1351,7 @@ document.addEventListener('click', async ev => {
       return act(() => api.update('orders', id, { phone: f ? f.value.trim() : '' }));
     }
     case 'work-period': UI.workPeriod = v; return loadWork();
+    case 'work-person': UI.workPerson = id; return renderPop();
     case 'stats-period': UI.statsPeriod = v; return render();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
     case 'show-done': UI.showDone = !UI.showDone; return render();
@@ -1422,7 +1445,8 @@ document.addEventListener('click', async ev => {
 document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', ev => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
-  if (ev.key === 'Escape' && UI.task) { UI.task = null; renderPop(); }
+  if (ev.key === 'Escape' && UI.workPerson) { UI.workPerson = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.task) { UI.task = null; renderPop(); }
   else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
