@@ -151,6 +151,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
+const VERSION = '20261117-1918';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -381,7 +382,8 @@ function viewSettings() {
     <p class="small muted" style="margin-bottom:10px">Екип: ${e(D.members.map(m => m.name).join(', '))}</p>
     ${listBlock('brand', 'Марки')}${listBlock('channel', 'Канали')}${listBlock('account', 'TikTok акаунти на Meivi')}
     <h2 style="margin:18px 0 10px;font-size:18px">Тениски</h2>${tees}
-    <button class="btn ghost wide" data-act="logout" style="margin-top:8px">Изход</button>`;
+    <button class="btn ghost wide" data-act="logout" style="margin-top:8px">Изход</button>
+    <p class="small muted" style="margin-top:14px;text-align:center">Версия ${e(VERSION)}</p>`;
 }
 
 function render() {
@@ -628,6 +630,24 @@ document.addEventListener('change', ev => {
   }
 });
 
+/* ---------- self-update: load the newest version when one has been published ---------- */
+async function checkVersion() {
+  if (!/^http/.test(location.protocol) || F) return;
+  const el = document.activeElement;
+  if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
+  try {
+    const r = await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const latest = (await r.text()).trim();
+    if (!latest || latest === VERSION) return;
+    let tried = '';
+    try { tried = sessionStorage.getItem('wf-tried') || ''; } catch (x) { /* optional */ }
+    if (tried === latest) return;
+    try { sessionStorage.setItem('wf-tried', latest); } catch (x) { /* optional */ }
+    location.replace(location.pathname + '?v=' + encodeURIComponent(latest));
+  } catch (x) { /* offline: keep the current version */ }
+}
+
 /* ---------- start ---------- */
 let live = false;
 async function start() {
@@ -640,6 +660,9 @@ async function start() {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
   }
 }
+checkVersion();
+setInterval(checkVersion, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
 (async () => {
   try { me = await api.session(); } catch (x) { me = null; }
   if (me) start(); else render();
