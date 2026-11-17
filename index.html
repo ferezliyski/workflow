@@ -42,7 +42,11 @@ button{cursor:pointer}
 :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
 h1,h2,h3,p{margin:0}
 .wrap{max-width:640px;margin:0 auto;overflow-x:clip;padding:calc(14px + env(safe-area-inset-top, 0px)) 14px calc(170px + env(safe-area-inset-bottom, 0px))}
-.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:12px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.fbtn{appearance:none;min-height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:13px}
+.fbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.fnow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:-4px 0 12px;font-size:13px;color:var(--soft)}
+.fnow .link{padding:4px 2px;font-size:13px}
 .top h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
 .top span{font-size:13px;color:var(--soft)}
 .muted{color:var(--soft)}
@@ -189,7 +193,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2019';
+const VERSION = '20261117-2022';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -235,7 +239,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [] };
-const UI = { tab: 'orders', filter: 'all', prod: 'all', open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', prod: 'all', fopen: false, open: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -375,7 +379,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || F);
+  const on = !!(UI.open || UI.fopen || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -388,6 +392,15 @@ function lockPage() {
 }
 function renderPop() {
   const box = $('#pop');
+  if (UI.fopen && UI.tab === 'orders') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev ? prev.scrollTop : 0;
+    box.innerHTML = filterPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.fopen = false;
   const o = UI.open && findOrder(UI.open);
   if (!o) { UI.open = null; box.innerHTML = ''; lockPage(); return; }
   lockPage();
@@ -402,29 +415,49 @@ function renderPop() {
   box.querySelector('.pop-in').scrollTop = keepY;
 }
 
-function viewOrders() {
+function filterData() {
   const all = activeOrders();
-  // product filter: which product kinds appear in the active orders
   const typeOrder = D.types.map(t => t.name);
   const prodCounts = {};
   all.forEach(o => [...new Set(itemsOf(o).map(it => it.name))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
   const prods = Object.keys(prodCounts).sort((a, b) => (typeOrder.indexOf(a) + 1 || 99) - (typeOrder.indexOf(b) + 1 || 99) || a.localeCompare(b));
   if (UI.prod !== 'all' && !prodCounts[UI.prod]) UI.prod = 'all';
   const list = UI.prod === 'all' ? all : all.filter(o => itemsOf(o).some(it => it.name === UI.prod));
-  // stage filter, counted within the chosen product
   const counts = {};
   list.forEach(o => orderTags(o).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
   const order = ['Чака клиента', ...D.stageDefs.map(s => s.name), 'На снимане', 'За опаковане', 'За товарителница'];
   const tags = Object.keys(counts).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   if (UI.filter !== 'all' && !counts[UI.filter]) UI.filter = 'all';
   const shown = UI.filter === 'all' ? list : list.filter(o => orderTags(o).includes(UI.filter));
+  return { all, prods, prodCounts, list, tags, counts, shown };
+}
+
+function filterPopHtml() {
+  const f = filterData();
   const chip = (act, cur, v, label, n) => `<button class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(label)}<span class="n">${n}</span></button>`;
-  const prodRow = prods.length > 1
-    ? `<div class="scroll">${chip('prod', UI.prod, 'all', 'Всички продукти', all.length)}${prods.map(n => chip('prod', UI.prod, n, n, prodCounts[n])).join('')}</div>` : '';
-  return `<div class="top"><h1>Поръчки</h1><span>${all.length} активни</span></div>
-    ${prodRow}
-    <div class="scroll">${chip('filter', UI.filter, 'all', 'Всички етапи', list.length)}${tags.map(t => chip('filter', UI.filter, t, t, counts[t])).join('')}</div>
-    ${shown.length ? shown.map(cardHtml).join('') : `<p class="empty">${all.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" role="dialog" aria-modal="true" aria-label="Филтри">
+    <div class="pop-head"><b class="who">Филтри</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <span class="lbl">Продукт</span>
+      <div class="chips">${chip('prod', UI.prod, 'all', 'Всички', f.all.length)}${f.prods.map(n => chip('prod', UI.prod, n, n, f.prodCounts[n])).join('')}</div>
+      <span class="lbl">Етап</span>
+      <div class="chips">${chip('filter', UI.filter, 'all', 'Всички', f.list.length)}${f.tags.map(t => chip('filter', UI.filter, t, t, f.counts[t])).join('')}</div>
+      <div class="actions">
+        <button class="btn" data-act="close-pop" data-x="1">Покажи ${f.shown.length} ${f.shown.length === 1 ? 'поръчка' : 'поръчки'}</button>
+        ${UI.prod !== 'all' || UI.filter !== 'all' ? '<button class="btn ghost" data-act="f-clear">Изчисти</button>' : ''}
+      </div>
+    </div>
+  </div></div>`;
+}
+
+function viewOrders() {
+  const f = filterData();
+  const active = (UI.prod !== 'all') + (UI.filter !== 'all');
+  const which = [UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
+  return `<div class="top"><h1>Поръчки</h1>
+      <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></div>
+    ${active ? `<p class="fnow">${e(which)} · ${f.shown.length} от ${f.all.length} <button class="link" data-act="f-clear">Изчисти</button></p>` : ''}
+    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.all.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`;
 }
 
 function viewSummary() {
@@ -662,12 +695,14 @@ document.addEventListener('click', async ev => {
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.tab = v; UI.open = null; render(); lockY = null; return window.scrollTo(0, 0);
+    case 'tab': UI.tab = v; UI.open = null; UI.fopen = false; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
-    case 'prod': UI.prod = v; return render();
+    case 'prod': UI.prod = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.open = null; UI.fopen = false; return renderPop();
+    case 'filters': UI.fopen = true; return renderPop();
+    case 'f-clear': UI.prod = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
     case 'logout': await api.signOut(); me = null; return render();
     case 'stage': {
@@ -739,7 +774,7 @@ document.addEventListener('click', async ev => {
 document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
 document.addEventListener('keydown', ev => {
   if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
-  if (ev.key === 'Escape' && UI.open) { UI.open = null; renderPop(); }
+  if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
