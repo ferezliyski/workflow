@@ -99,6 +99,24 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 a{color:var(--ink)}
 .ready{margin-top:6px;font-weight:700;color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
+.star{margin-left:5px;color:#E0A100}
+.prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
+.prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
+.prev-row{appearance:none;display:block;width:100%;margin-top:6px;padding:0;border:0;background:none;color:var(--ink);text-align:left;font-size:13.5px}
+button.prev-row{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line)}
+.phone-hint{margin-top:6px;color:#B07F00;font-weight:700}
+.phone-hint:empty{display:none}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:12px;background:var(--surface);border:1.5px solid var(--line)}
+.tile span{font-size:12px;font-weight:700;color:var(--soft)}
+.tile b{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.tile small{font-size:12px;color:var(--soft)}
+.bars{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.bar-row{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:baseline}
+.bar-l{font-weight:700;font-size:13.5px;overflow-wrap:anywhere}
+.bar-v{font-size:13px;color:var(--soft);font-variant-numeric:tabular-nums}
+.bar-t{grid-column:1 / -1;height:8px;border-radius:4px;background:var(--tint)}
+.bar-t i{display:block;height:100%;border-radius:4px;background:var(--ink);opacity:.8}
 .back{display:inline-block;margin:-4px 0 4px;padding:6px 0;font-size:13.5px;text-decoration:none}
 .group{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:18px}
 .group h2{padding:9px 14px;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--band);color:var(--on-band)}
@@ -221,7 +239,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2105';
+const VERSION = '20261117-2114';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -239,7 +257,7 @@ function realApi() {
     async signOut() { await sb.auth.signOut(); },
     async load() {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
-      const [members, options, stageDefs, types, typeStages, orders, tasks, notes] = await Promise.all([
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history] = await Promise.all([
         sb.from('members').select('*'),
         sb.from('options').select('*').order('sort'),
         sb.from('stage_defs').select('*').order('sort'),
@@ -247,9 +265,10 @@ function realApi() {
         sb.from('product_type_stages').select('*').order('sort'),
         sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
         sb.from('tasks').select('*').order('created_at'),
-        sb.from('order_notes').select('*').order('created_at')
+        sb.from('order_notes').select('*').order('created_at'),
+        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty)').order('created_at')
       ]);
-      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes) };
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
     },
     async loadAll() {
       return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
@@ -273,8 +292,8 @@ const api = window.__mockApi || realApi();
 
 /* ---------- state ---------- */
 let me = null;
-let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -285,6 +304,14 @@ const opts = kind => D.options.filter(o => o.kind === kind);
 const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
 const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
 const notesOf = id => D.notes.filter(n => n.order_id === id);
+function phoneKey(p) {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.startsWith('00359')) d = '0' + d.slice(5);
+  else if (d.startsWith('359')) d = '0' + d.slice(3);
+  return d.length >= 6 ? d : '';
+}
+const otherOrders = o => { const k = phoneKey(o.phone); return k ? D.history.filter(h => h.id !== o.id && phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : []; };
+const star = o => otherOrders(o).length ? '<span class="star" title="Поръчвал е и преди" aria-label="Поръчвал е и преди">★</span>' : '';
 const money = v => v == null || v === '' ? '' : `${Number(v).toFixed(2).replace('.', ',')} €`;
 const priceInput = v => v == null ? '' : String(v).replace('.', ',');
 function parsePrice(v) {
@@ -374,7 +401,7 @@ function cardHtml(o) {
     ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([o.customer, o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
-      <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}</span><span class="src">${e(src)}</span></div>
+      <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
       ${badges ? `<div class="badges">${badges}</div>` : ''}
     </div>
     ${rows}${orderRow ? `<div class="prod">${orderRow}</div>` : ''}
@@ -401,6 +428,11 @@ function bodyHtml(o) {
   const armed = UI.armed === o.id;
   return `<div class="card-body">
     ${o.phone ? `<p class="small" style="margin-top:12px">Телефон: <a href="tel:${e(o.phone)}">${e(o.phone)}</a></p>` : ''}
+    ${otherOrders(o).length ? `<div class="prev"><p class="prev-h">★ Други поръчки на клиента</p>${otherOrders(o).map(h => {
+      const st = h.waybill_at ? `Изпратена ${e(day(h.waybill_at))}${h.tracking ? ' · ' + e(h.tracking) : ''}` : 'Активна';
+      const inner = `<b>#${h.num}</b> · ${e(day(h.created_at))} · ${st}${h.price != null ? ' · ' + e(money(h.price)) : ''}`;
+      return findOrder(h.id) ? `<button class="prev-row" data-act="open" data-id="${h.id}">${inner}</button>` : `<p class="prev-row">${inner}</p>`;
+    }).join('')}</div>` : ''}
     <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
     <label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
@@ -469,7 +501,7 @@ function renderPop() {
   const keepY = prev ? prev.scrollTop : 0;
   const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
   box.innerHTML = `<div class="pop" data-act="close-pop"><div class="pop-in" role="dialog" aria-modal="true" aria-label="Поръчка ${o.num}">
-    <div class="pop-head"><div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}</span><span class="src">${e(src)}</span></div>
+    <div class="pop-head"><div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
       <button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
     ${bodyHtml(o)}
   </div></div>`;
@@ -645,6 +677,71 @@ function viewSettings() {
     <p class="small muted" style="margin-top:14px;text-align:center">Версия ${e(VERSION)}</p>`;
 }
 
+/* ---------- statistics (owner only for now) ---------- */
+const MONTHS = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
+function periodRange(k) {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (k === 'month') return [new Date(y, m, 1), null];
+  if (k === 'prev') return [new Date(y, m - 1, 1), new Date(y, m, 1)];
+  if (k === '90') return [new Date(Date.now() - 90 * 864e5), null];
+  return [null, null];
+}
+function barList(title, rows, fmt) {
+  if (!rows.length) return '';
+  const max = Math.max(...rows.map(r => r.v), 1);
+  return `<section class="block"><h2><span>${e(title)}</span></h2><div class="bars">${rows.map(r => `
+    <div class="bar-row"><span class="bar-l">${e(r.k)}</span><span class="bar-v">${e(fmt(r))}</span>
+      <span class="bar-t"><i style="width:${Math.max(2, Math.round(r.v / max * 100))}%"></i></span></div>`).join('')}</div></section>`;
+}
+function groupBy(list, keyFn) {
+  const m = new Map();
+  list.forEach(o => { const k = keyFn(o); if (!k) return; const g = m.get(k) || { k, n: 0, sum: 0 }; g.n++; g.sum += Number(o.price) || 0; m.set(k, g); });
+  return [...m.values()].map(g => Object.assign(g, { v: g.n })).sort((a, b) => b.n - a.n || b.sum - a.sum);
+}
+function viewStats() {
+  const [from, to] = periodRange(UI.statsPeriod);
+  const inRange = h => { const d = new Date(h.created_at); return (!from || d >= from) && (!to || d < to); };
+  const list = D.history.filter(inRange);
+  const priced = list.filter(h => h.price != null);
+  const total = priced.reduce((a, h) => a + Number(h.price), 0);
+  const firstSeen = new Map();
+  D.history.forEach(h => { const k = phoneKey(h.phone); if (k && !firstSeen.has(k)) firstSeen.set(k, h.id); });
+  const repeat = list.filter(h => { const k = phoneKey(h.phone); return k && firstSeen.get(k) !== h.id; }).length;
+  const shipped = list.filter(h => h.waybill_at).length;
+  const cnt = g => `${g.n} · ${money(g.sum) || '0,00 €'}`;
+  const prodMap = new Map();
+  list.forEach(h => (h.items || []).forEach(it => prodMap.set(it.name, (prodMap.get(it.name) || 0) + (it.qty || 1))));
+  const prods = [...prodMap.entries()].map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const a = new Date(now.getFullYear(), now.getMonth() - i, 1), b = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    const ms = D.history.filter(h => { const d = new Date(h.created_at); return d >= a && d < b; });
+    months.push({ k: `${MONTHS[a.getMonth()]} ${String(a.getFullYear()).slice(2)}`, n: ms.length, sum: ms.reduce((x, h) => x + (Number(h.price) || 0), 0) });
+  }
+  const seg = (v, l) => `<button class="chip" data-act="stats-period" data-v="${v}" aria-pressed="${UI.statsPeriod === v}">${l}</button>`;
+  const tile = (label, value, sub) => `<div class="tile"><span>${e(label)}</span><b>${e(value)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>`;
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Статистика</h1><span>${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}</span></div>
+    <div class="chips" style="margin-bottom:14px">${seg('month', 'Този месец')}${seg('prev', 'Миналия месец')}${seg('90', '90 дни')}${seg('all', 'Всичко')}</div>
+    <div class="tiles">
+      ${tile('Поръчки', String(list.length), `${shipped} изпратени`)}
+      ${tile('Оборот', money(total) || '0,00 €', priced.length < list.length ? `${list.length - priced.length} без цена` : 'наложен платеж')}
+      ${tile('Средна поръчка', priced.length ? money(total / priced.length) : '—', '')}
+      ${tile('Повторни клиенти', String(repeat), list.length ? `${Math.round(repeat / list.length * 100)}% от поръчките` : '')}
+    </div>
+    ${list.length ? '' : '<p class="empty">Няма поръчки за този период.</p>'}
+    ${barList('По магазин', groupBy(list, h => h.brand), cnt)}
+    ${barList('По канал', groupBy(list, h => h.channel), cnt)}
+    ${barList('TikTok акаунти на Meivi', groupBy(list.filter(h => h.brand === 'Meivi' && h.channel === 'TikTok'), h => h.account || 'Без акаунт'), cnt)}
+    ${barList('Продукти (бройки)', prods, r => `${r.v} бр.`)}
+    <section class="block"><h2><span>По месеци</span></h2><div class="tbl-wrap"><table>
+      <thead><tr><th>Месец</th><th>Поръчки</th><th>Оборот</th></tr></thead>
+      <tbody>${months.map(r => `<tr><td>${e(r.k)}</td><td class="${r.n ? 'v' : 'z'}">${r.n || '·'}</td><td class="${r.sum ? 'v' : 'z'}">${r.sum ? e(money(r.sum)) : '·'}</td></tr>`).join('')}</tbody>
+    </table></div></section>
+    <p class="small muted" style="margin-top:6px">Оборотът е сборът от цените за наложен платеж, въведени в поръчките.</p>`;
+}
+
 /* ---------- profile & personal tasks ---------- */
 const openTask = t => !t.done_at;
 const taskSort = (a, b) => (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1);
@@ -693,6 +790,7 @@ function viewProfile() {
     }).join('');
     return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
       <section class="group"><h2>Екип</h2>${rows}</section>
+      <button class="btn wide" data-act="tab" data-v="stats" style="margin-top:6px">Статистика</button>
       ${settingsBtn}`;
   }
   const uid = admin ? UI.person : me.id;
@@ -766,8 +864,9 @@ async function saveTask() {
 function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && UI.tab === 'settings') ? 'aria-current="page"' : ''}>${l}</button>`;
+  if (UI.tab === 'stats' && !isAdmin()) UI.tab = 'profile';
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && (UI.tab === 'settings' || UI.tab === 'stats')) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -777,6 +876,13 @@ function render() {
 
 /* ---------- new order form ---------- */
 const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, custom: false, note: '', stages: [], extra: '' });
+function phoneHint(phone) {
+  const k = phoneKey(phone);
+  const list = k ? D.history.filter(h => phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : [];
+  if (!list.length) return '';
+  const last = list[0];
+  return `★ Поръчвал е преди: ${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}, последна #${last.num} от ${e(day(last.created_at))}${last.customer ? ' (' + e(last.customer) + ')' : ''}`;
+}
 function openForm() {
   F = { customer: '', phone: '', address: '', price: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
   renderForm();
@@ -828,6 +934,7 @@ function renderForm() {
     <div class="sheet-top"><h2>Нова поръчка</h2><button class="link" data-act="f-close">Отказ</button></div>
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
     <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
+    <p class="small phone-hint" id="f-phone-hint">${phoneHint(F.phone)}</p>
     <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
     <label class="lbl" for="f-price">Цена (наложен платеж), €</label><input class="field" id="f-price" inputmode="decimal" value="${e(F.price)}" autocomplete="off">
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
@@ -955,6 +1062,7 @@ document.addEventListener('click', async ev => {
     case 'search-x': UI.searching = false; UI.q = ''; return render();
     case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
+    case 'stats-period': UI.statsPeriod = v; return render();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
     case 'show-done': UI.showDone = !UI.showDone; return render();
     case 'task-new': return startTask(null, b.dataset.order ? { order_id: b.dataset.order } : (isAdmin() && UI.person ? { assignee: UI.person } : {}));
@@ -1060,6 +1168,7 @@ document.addEventListener('input', ev => {
   if (!F) return;
   const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-price': 'price', 'f-note': 'note', 'f-due': 'due' };
   if (map[t.id]) F[map[t.id]] = t.value;
+  if (t.id === 'f-phone') { const h = $('#f-phone-hint'); if (h) h.innerHTML = phoneHint(t.value); }
   else if (t.id === 'f-name') F.edit.name = t.value;
   else if (t.id === 'f-inote') F.edit.note = t.value;
   else if (t.id === 'f-extra') F.edit.extra = t.value;
