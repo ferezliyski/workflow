@@ -154,7 +154,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-1925';
+const VERSION = '20261117-1928';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -553,9 +553,16 @@ document.addEventListener('click', async ev => {
     case 'new': return openForm();
     case 'logout': await api.signOut(); me = null; return render();
     case 'stage': {
-      let s; D.orders.some(o => o.items.some(i => (s = i.item_stages.find(x => x.id === id))));
-      const p = stamp(s && s.done_at);
-      return act(() => api.update('item_stages', id, { done_at: p.at, done_by: p.by }));
+      // Stages are a sequence: finishing one also finishes the ones before it,
+      // and undoing one also undoes the ones after it.
+      let it, s;
+      D.orders.some(o => o.items.some(i => { const f = i.item_stages.find(x => x.id === id); if (f) { it = i; s = f; } return !!f; }));
+      if (!s) return;
+      const all = stagesOf(it), at = all.findIndex(x => x.id === id);
+      const now = new Date().toISOString();
+      const targets = s.done_at ? all.slice(at).filter(x => x.done_at) : all.slice(0, at + 1).filter(x => !x.done_at);
+      const patch = s.done_at ? { done_at: null, done_by: null } : { done_at: now, done_by: me.id };
+      return act(() => Promise.all(targets.map(x => api.update('item_stages', x.id, patch))));
     }
     case 'photo': {
       let it; D.orders.some(o => (it = o.items.find(i => i.id === id)));
