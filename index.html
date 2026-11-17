@@ -101,6 +101,10 @@ a{color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
 .phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
 .phone-row .link{padding:4px 0;font-size:13px}
+.item-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.item-h .link{flex:none;padding:2px 0;font-size:13px}
+.ie-h{margin-top:10px;font-weight:800}
+.warn{margin-top:10px;font-weight:700;color:#B07F00}
 .star{margin-left:5px;color:#E0A100}
 .prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
 .prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
@@ -241,7 +245,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2118';
+const VERSION = '20261117-2124';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -275,6 +279,7 @@ function realApi() {
     async loadAll() {
       return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
     },
+    async saveItem(p) { return ok(await sb.rpc('save_item', { p })); },
     async createOrder(p) { return ok(await sb.rpc('create_order', { p })); },
     async update(table, id, patch) { ok(await sb.from(table).update(patch).eq('id', id)); },
     async insert(table, row) { ok(await sb.from(table).insert(row)); },
@@ -295,7 +300,7 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
-const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', editPhone: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -415,6 +420,75 @@ function stepBtn(act, id, label, doneAt, doneBy, cls) {
     <b>${e(label)}</b>${doneAt ? `<small>${e(nameOf(doneBy))} · ${e(day(doneAt))}</small>` : ''}</button>`;
 }
 
+function itemEditorHtml(o) {
+  const IE = UI.itemEdit, d = IE.draft, t = typeOf(d.typeId);
+  const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
+  let body = '';
+  if (t && t.is_tshirt) {
+    body = `<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
+      <span class="lbl">Цвят</span>${pick('ie-color', t.colors, d.color)}
+      <label class="check"><input type="checkbox" id="ie-custom" ${d.custom ? 'checked' : ''}>Дизайн по желание на клиента</label>`;
+  } else if (d.typeId === 'custom') {
+    body = `<label class="lbl" for="ie-name">Име на продукта</label><input class="field" id="ie-name" value="${e(d.name)}" autocomplete="off">
+      <span class="lbl">Етапи</span>
+      <div class="chips">${D.stageDefs.map(x => `<button type="button" class="chip" data-act="ie-stage" data-v="${x.key}" aria-pressed="${d.stages.some(y => y.key === x.key)}">${e(x.name)}</button>`).join('')}
+      ${d.stages.filter(x => x.key === 'custom').map(x => `<button type="button" class="chip" data-act="ie-stage-x" data-v="${e(x.name)}" aria-pressed="true">${e(x.name)} ✕</button>`).join('')}</div>
+      <div class="inline" style="margin-top:10px"><input class="field" id="ie-extra" value="${e(d.extra)}" autocomplete="off"><button type="button" class="btn ghost" data-act="ie-stage-add">Добави етап</button></div>`;
+  }
+  const reset = IE.itemId && needsReset(IE);
+  return `<div class="editor" id="ie-box">
+    <p class="ie-h">${IE.itemId ? 'Промяна на продукт' : 'Нов продукт в поръчката'}</p>
+    <label class="lbl" for="ie-type">Продукт</label>
+    <select class="field" id="ie-type"><option value="">Избери…</option>
+      ${D.types.map(x => `<option value="${x.id}" ${d.typeId === x.id ? 'selected' : ''}>${e(x.name)}</option>`).join('')}
+      <option value="custom" ${d.typeId === 'custom' ? 'selected' : ''}>Друго</option></select>
+    ${body}
+    ${d.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ie-qty" data-v="-1" aria-label="По-малко">−</button><b>${d.qty}</b><button type="button" data-act="ie-qty" data-v="1" aria-label="Повече">+</button></div>
+      <label class="lbl" for="ie-note">Бележка за продукта</label><input class="field" id="ie-note" value="${e(d.note)}" autocomplete="off">` : ''}
+    ${reset ? '<p class="warn">Етапите на този продукт ще започнат отначало.</p>' : ''}
+    <p class="err" role="alert">${e(IE.err || '')}</p>
+    <div class="actions"><button class="btn" data-act="ie-save">Запази</button><button class="btn ghost" data-act="ie-cancel">Отказ</button></div>
+    ${IE.itemId ? `<div class="actions"><button class="btn danger" data-act="ie-del">${UI.armed === 'item:' + IE.itemId ? 'Натисни пак, за да махнеш продукта' : 'Махни продукта от поръчката'}</button></div>` : ''}
+  </div>`;
+}
+function startItemEdit(orderId, itemId) {
+  const o = findOrder(orderId), it = itemId && itemsOf(o).find(x => x.id === itemId);
+  const draft = blankItem();
+  if (it) {
+    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, custom: it.custom_design, note: it.note,
+      stages: stagesOf(it).map(x => ({ key: x.stage_key, name: x.name, kind: x.kind, sort: x.sort })) });
+  }
+  UI.itemEdit = { orderId, itemId: it ? it.id : null, draft, orig: it ? { typeId: draft.typeId, custom: draft.custom, stages: draft.stages.map(x => x.name).join('|') } : null, err: '' };
+  renderPop();
+  setTimeout(() => { const b = $('#ie-box'); if (b) b.scrollIntoView({ block: 'nearest' }); }, 30);
+}
+function needsReset(IE) {
+  const d = IE.draft, o = IE.orig;
+  if (!o) return true;
+  if (d.typeId !== o.typeId) return true;
+  if (d.typeId === 'custom') return d.stages.map(x => x.name).join('|') !== o.stages;
+  return !!d.custom !== !!o.custom;
+}
+async function saveItemEdit() {
+  const IE = UI.itemEdit, d = IE.draft, t = typeOf(d.typeId);
+  if (!d.typeId) { IE.err = 'Избери продукт.'; return renderPop(); }
+  if (t && t.is_tshirt && (!d.size || !d.color)) { IE.err = 'Избери размер и цвят.'; return renderPop(); }
+  if (d.typeId === 'custom' && !d.name.trim()) { IE.err = 'Напиши име на продукта.'; return renderPop(); }
+  if (d.typeId === 'custom') d.stages.sort((a, b) => a.sort - b.sort);
+  const reset = needsReset(IE);
+  try {
+    await api.saveItem({
+      id: IE.itemId || '', order_id: IE.orderId, product_type_id: d.typeId === 'custom' ? '' : d.typeId,
+      name: d.typeId === 'custom' ? d.name.trim() : t.name, is_tshirt: !!(t && t.is_tshirt),
+      size: t && t.is_tshirt ? d.size : '', color: t && t.is_tshirt ? d.color : '', qty: d.qty,
+      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), reset_stages: reset, stages: draftStages(d)
+    });
+    UI.itemEdit = null;
+    toast(IE.itemId ? 'Продуктът е променен' : 'Продуктът е добавен');
+    await refresh(true);
+  } catch (x) { IE.err = 'Не успях да запазя. Провери интернета и опитай пак.'; renderPop(); }
+}
+
 function bodyHtml(o) {
   const items = itemsOf(o).map(it => {
     const st = stagesOf(it);
@@ -422,11 +496,14 @@ function bodyHtml(o) {
     const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'cur' : ''}`)).join('');
     const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
       <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
-    return `<div class="item"><h3>${e(itemLabel(it))}</h3>
+    if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
+    return `<div class="item"><div class="item-h"><h3>${e(itemLabel(it))}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
       ${it.custom_design ? '<p class="small muted">Дизайн по желание на клиента</p>' : ''}
       ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
       <div class="steps">${steps}${photo}</div></div>`;
-  }).join('');
+  }).join('') + (UI.itemEdit && UI.itemEdit.orderId === o.id && !UI.itemEdit.itemId
+    ? `<div class="item">${itemEditorHtml(o)}</div>`
+    : (o.waybill_at ? '' : `<button class="btn ghost" data-act="ie-open" data-order="${o.id}" style="margin-top:12px">+ Добави продукт</button>`));
   const armed = UI.armed === o.id;
   return `<div class="card-body">
     ${UI.editPhone === o.id
@@ -1009,7 +1086,7 @@ const findOrder = id => D.orders.find(o => o.id === id);
 let toastTimer = 0;
 function toast(text, undoAct, id) {
   clearTimeout(toastTimer);
-  $('#toast').innerHTML = `<div class="toast" role="status"><span>${e(text)}</span><button data-act="${undoAct}" data-id="${id}" data-undo="1">Отмени</button></div>`;
+  $('#toast').innerHTML = `<div class="toast" role="status"><span>${e(text)}</span>${undoAct ? `<button data-act="${undoAct}" data-id="${id}" data-undo="1">Отмени</button>` : ''}</div>`;
   toastTimer = setTimeout(() => { $('#toast').innerHTML = ''; }, 6000);
 }
 const stamp = on => (on ? { at: null, by: null } : { at: new Date().toISOString(), by: me.id });
@@ -1046,7 +1123,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
@@ -1057,8 +1134,8 @@ document.addEventListener('click', async ev => {
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'sum-mode': UI.sumMode = v; return render();
-    case 'open': UI.task = null; UI.editPhone = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; UI.itemEdit = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'search':
       if (UI.searching) { UI.searching = false; UI.q = ''; return render(); }
@@ -1067,6 +1144,31 @@ document.addEventListener('click', async ev => {
     case 'search-x': UI.searching = false; UI.q = ''; return render();
     case 'f-clear': UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
     case 'new': UI.open = null; renderPop(); return openForm();
+    case 'ie-open': UI.armed = null; return startItemEdit(b.dataset.order, id || null);
+    case 'ie-cancel': UI.itemEdit = null; return renderPop();
+    case 'ie-save': return saveItemEdit();
+    case 'ie-size': UI.itemEdit.draft.size = v; return renderPop();
+    case 'ie-color': UI.itemEdit.draft.color = v; return renderPop();
+    case 'ie-qty': UI.itemEdit.draft.qty = Math.max(1, UI.itemEdit.draft.qty + Number(v)); return renderPop();
+    case 'ie-stage': {
+      const def = D.stageDefs.find(x => x.key === v), st = UI.itemEdit.draft.stages, i = st.findIndex(x => x.key === v);
+      if (i >= 0) st.splice(i, 1); else st.push({ key: def.key, name: def.name, kind: def.kind, sort: def.sort });
+      return renderPop();
+    }
+    case 'ie-stage-add': {
+      const d = UI.itemEdit.draft, val = d.extra.trim();
+      if (val) { d.stages.push({ key: 'custom', name: val, kind: 'work', sort: 1000 + d.stages.length }); d.extra = ''; }
+      return renderPop();
+    }
+    case 'ie-stage-x': UI.itemEdit.draft.stages = UI.itemEdit.draft.stages.filter(x => !(x.key === 'custom' && x.name === v)); return renderPop();
+    case 'ie-del': {
+      const IE = UI.itemEdit, o = findOrder(IE.orderId);
+      if (itemsOf(o).length <= 1) { IE.err = 'Това е единственият продукт. Изтрий цялата поръчка, ако не е нужна.'; return renderPop(); }
+      if (UI.armed !== 'item:' + IE.itemId) { UI.armed = 'item:' + IE.itemId; return renderPop(); }
+      UI.armed = null; UI.itemEdit = null;
+      toast('Продуктът е махнат');
+      return act(() => api.remove('items', IE.itemId));
+    }
     case 'phone-edit':
       UI.editPhone = id; renderPop();
       return setTimeout(() => { const f = $(`#ph-${id}`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }, 30);
@@ -1172,6 +1274,10 @@ document.addEventListener('keydown', ev => {
 });
 document.addEventListener('input', ev => {
   const t = ev.target;
+  if (UI.itemEdit) {
+    const k = { 'ie-name': 'name', 'ie-note': 'note', 'ie-extra': 'extra' }[t.id];
+    if (k) { UI.itemEdit.draft[k] = t.value; return; }
+  }
   if (t.id === 'q') { UI.q = t.value; return updateResults(); }
   if (UI.task) {
     const k = { 't-title': 'title', 't-note': 'note', 't-due': 'due' }[t.id];
@@ -1187,6 +1293,11 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (UI.itemEdit) {
+    if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
+    if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; return renderPop(); }
+    if (/^ie-/.test(t.id)) return;
+  }
   if (UI.task) {
     if (t.id === 't-urgent') { UI.task.draft.urgent = t.checked; return; }
     if (t.id === 't-order') { UI.task.draft.order_id = t.value; return; }
