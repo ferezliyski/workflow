@@ -2,6 +2,8 @@
 
 **Always reply to the owner in Bulgarian.** Keep replies short. He works mostly from his phone and is not a programmer: explain in plain words, not code. All UI text is Bulgarian.
 
+Read HISTORY.md too: it has the history of the work and the open items.
+
 ## What this is
 
 An internal phone web app for a small company. The team is 4 people, soon 7–8. The company has two brands:
