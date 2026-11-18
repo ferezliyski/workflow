@@ -95,6 +95,12 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .card-top .num,.card-top .src{color:var(--on-band);opacity:.72}
 .card-top .badge{background:none;color:var(--on-band);box-shadow:inset 0 0 0 1.5px var(--on-band)}
 .card-top .badge.urgent,.card-top .badge.late{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.card-top .badge.photo-req{background:#f2c94c;color:#1b1b1b;box-shadow:none}
+.notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px}
+.notice{background:var(--card);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
+.notice .ico{font-size:44px;line-height:1}
+.notice h2{font-size:24px;margin:10px 0 6px}
+.notice p{margin:0 0 18px;color:var(--muted)}
 .card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
 .nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 .nosize-btn span{color:var(--muted);font-weight:600;font-size:13px}
@@ -307,7 +313,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1020';
+const VERSION = '20261118-1040';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -508,6 +514,7 @@ function cardHtml(o) {
   const badges = [
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
+    o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
     ...sizeWaitItems(o).map(it => `<span class="badge nosize">⚠ Няма размер ${e([it.size, it.color].filter(Boolean).join(' '))}</span>`),
     o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : '',
     notesOf(o.id).length ? `<span class="badge">Бележки: ${notesOf(o.id).length}</span>` : ''
@@ -666,6 +673,7 @@ function bodyHtml(o) {
     <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
     <div class="actions">
       <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
+      ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
       <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
       <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
     </div>
@@ -1634,6 +1642,13 @@ function toast(text, undoAct, id) {
   $('#toast').innerHTML = `<div class="toast" role="status"><span>${e(text)}</span>${undoAct ? `<button data-act="${undoAct}" data-id="${id}" data-undo="1">Отмени</button>` : ''}</div>`;
   toastTimer = setTimeout(() => { $('#toast').innerHTML = ''; }, 6000);
 }
+function showNotice(icon, title, text) {
+  const old = document.getElementById('notice'); if (old) old.remove();
+  const d = document.createElement('div'); d.id = 'notice'; d.className = 'notice-ov';
+  d.innerHTML = `<div class="notice" role="alertdialog" aria-label="${e(title)}"><div class="ico">${icon}</div><h2>${e(title)}</h2><p>${e(text)}</p><button class="btn wide" data-act="notice-ok">Разбрах</button></div>`;
+  document.body.appendChild(d);
+  if (navigator.vibrate) try { navigator.vibrate(200); } catch (x) {}
+}
 const stamp = on => (on ? { at: null, by: null } : { at: new Date().toISOString(), by: me.id });
 
 function authMsg(x) {
@@ -1803,6 +1818,18 @@ document.addEventListener('click', async ev => {
       const now = new Date().toISOString();
       const targets = s.done_at ? all.slice(at).filter(x => x.done_at) : all.slice(0, at + 1).filter(x => !x.done_at);
       const patch = s.done_at ? { done_at: null, done_by: null } : { done_at: now, done_by: me.id };
+      // an order requested for photos goes to photos by itself once every product is made
+      const o = D.orders.find(x => x.items.includes(it));
+      const readyAfter = i => i === it ? !i.photo_at && all.slice(at + 1).every(x => x.done_at) : itemState(i).code === 'ready';
+      if (!s.done_at && o && o.photo_req && !o.packed_at && !o.waybill_at && itemsOf(o).every(readyAfter)) {
+        const now2 = new Date().toISOString();
+        showNotice('📷', 'Предай за снимане', `#${o.num} ${o.customer || ''} е готова. Отбелязах я като изпратена за снимане.`);
+        return act(() => Promise.all([
+          ...targets.map(x => api.update('item_stages', x.id, patch)),
+          ...itemsOf(o).map(i => api.update('items', i.id, { photo_at: now2, photo_by: me.id })),
+          api.update('orders', o.id, { photo_req: false })
+        ]));
+      }
       if (!s.done_at && !undo) toast(`Отбелязано: ${s.name}`, 'stage', id);
       return act(() => Promise.all(targets.map(x => api.update('item_stages', x.id, patch))));
     }
@@ -1845,6 +1872,8 @@ document.addEventListener('click', async ev => {
       if (p.at && !undo) toast('Поръчката е изпратена', 'waybill', id);
       return act(() => api.update('orders', id, patch));
     }
+    case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
+    case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
     case 'urgent': return act(() => api.update('orders', id, { urgent: !findOrder(id).urgent }));
     case 'delete':
       if (UI.armed !== id) { UI.armed = id; return render(); }
