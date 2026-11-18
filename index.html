@@ -79,6 +79,10 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
+.dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
+.dlist:empty{display:none}
+.dcat{padding:9px 12px 3px;font-size:12px;font-weight:700;color:var(--soft)}
+.dopt{display:block;width:100%;padding:9px 12px;border:0;background:none;color:var(--ink);font-size:14.5px;font-weight:600;text-align:left}
 .cod{font-weight:800;font-size:16px}
 .cod:empty{display:none}
 #f-total{margin-top:12px}
@@ -321,7 +325,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1617';
+const VERSION = '20261118-1622';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -495,10 +499,31 @@ const itemLabel = it => [catOf(it), it.design, it.qty > 1 ? `${it.qty}× ${it.na
 // same text as itemLabel, with the name of the product (the design, or the product itself when there is no design) in blue
 const itemLabelHtml = it => { const nm = it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, b = v => `<span class="pn">${e(v)}</span>`; return [catOf(it) && e(catOf(it)), it.design && b(it.design), it.design ? e(nm) : b(nm), it.size && e(it.size), it.color && e(it.color)].filter(Boolean).join(' · '); };
 const designsOf = typeId => (D.designs || []).filter(x => x.active !== false && x.kind === 'single' && x.product_type_id === typeId);
-const designPick = (pre, typeId, cur, custom) => { const l = designsOf(typeId), id = pre + '-design';
-  const list = l.length && !custom ? `<label class="lbl" for="${id}">Дизайн</label><select class="field" id="${id}"><option value="">—</option>${cur && !l.some(x => x.name === cur) ? `<option selected>${e(cur)}</option>` : ''}${[...new Set(l.map(x => x.category || ''))].sort((a, b) => a.localeCompare(b, 'bg')).map(c => `<optgroup label="${e(c || 'Други')}">${l.filter(x => (x.category || '') === c).map(x => `<option ${x.name === cur ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</optgroup>`).join('')}</select>` : '';
-  return list + `<label class="check"><input type="checkbox" id="${pre}-custom" ${custom ? 'checked' : ''}>Персонален дизайн</label>`
-    + (custom ? `<input class="field" id="${pre}-dname" style="margin-top:8px" value="${e(cur)}" autocomplete="off" aria-label="Име на дизайна">` : ''); };
+// the design field is a list you can type in: typing narrows the list (by name or category), a tap picks
+const designList = (pre, typeId, q) => {
+  const n = String(q || '').toLowerCase().trim();
+  const l = designsOf(typeId).filter(x => !n || x.name.toLowerCase().includes(n) || (x.category || '').toLowerCase().includes(n));
+  return [...new Set(l.map(x => x.category || ''))].sort((a, b) => a.localeCompare(b, 'bg')).map(c => `<p class="dcat">${e(c || 'Други')}</p>` +
+    l.filter(x => (x.category || '') === c).map(x => `<button type="button" class="dopt" data-act="${pre}-dpick" data-v="${e(x.name)}">${e(x.name)}</button>`).join('')).join('');
+};
+const designPick = (pre, d) => {
+  const has = designsOf(d.typeId).length, q = d.dq != null ? d.dq : d.design;
+  const list = has && !d.custom ? `<label class="lbl" for="${pre}-dq">Дизайн</label><input class="field" id="${pre}-dq" value="${e(q)}" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="dlist" id="${pre}-dl"></div>` : '';
+  return list + `<label class="check"><input type="checkbox" id="${pre}-custom" ${d.custom ? 'checked' : ''}>Персонален дизайн</label>`
+    + (d.custom ? `<input class="field" id="${pre}-dname" style="margin-top:8px" value="${e(d.design)}" autocomplete="off" aria-label="Име на дизайна">` : ''); };
+const designDraft = pre => pre === 'f' ? (F && F.edit) : (UI.itemEdit && UI.itemEdit.draft);
+function designTyped(t) {
+  const pre = t.id.split('-')[0], d = designDraft(pre); if (!d) return;
+  d.dq = t.value;
+  const ex = designsOf(d.typeId).find(x => x.name.toLowerCase() === t.value.toLowerCase().trim());
+  d.design = ex ? ex.name : '';
+  const box = $('#' + pre + '-dl'); if (box) box.innerHTML = designList(pre, d.typeId, t.value);
+}
+const designMissing = d => !d.custom && !d.design && String(d.dq || '').trim() ? 'Избери дизайн от списъка.' : '';
+document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre), box = $('#' + pre + '-dl'); if (d && box) { box.innerHTML = designList(pre, d.typeId, d.design ? '' : t.value);
+  // the phone keyboard would cover the list: bring the field to the top so the list stays visible above the keyboard
+  setTimeout(() => { const lb = t.previousElementSibling; if (document.activeElement === t) (lb || t).scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); } } });
+document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) setTimeout(() => { const box = $('#' + t.id.split('-')[0] + '-dl'); if (box && document.activeElement !== t) box.innerHTML = ''; }, 250); });
 
 /* ---------- views ---------- */
 function viewAuth() {
@@ -578,7 +603,7 @@ function itemEditorHtml(o) {
   const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
   let body = '';
   if (t && t.is_tshirt) {
-    body = `${designPick('ie', t.id, d.design, d.custom)}<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
+    body = `${designPick('ie', d)}<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
       <span class="lbl">Цвят</span>${pick('ie-color', t.colors, d.color)}`;
   } else if (d.typeId === 'custom') {
     body = `<label class="lbl" for="ie-name">Име на продукта</label><input class="field" id="ie-name" value="${e(d.name)}" autocomplete="off">
@@ -625,6 +650,7 @@ function needsReset(IE) {
 async function saveItemEdit() {
   const IE = UI.itemEdit, d = IE.draft, t = typeOf(d.typeId);
   if (!d.typeId) { IE.err = 'Избери продукт.'; return renderPop(); }
+  if (t && t.is_tshirt && designMissing(d)) { IE.err = designMissing(d); return renderPop(); }
   if (t && t.is_tshirt && (!d.size || !d.color)) { IE.err = 'Избери размер и цвят.'; return renderPop(); }
   if (d.typeId === 'custom' && !d.name.trim()) { IE.err = 'Напиши име на продукта.'; return renderPop(); }
   if (d.typeId === 'custom') d.stages.sort((a, b) => a.sort - b.sort);
@@ -1486,7 +1512,7 @@ function editorHtml() {
   const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
   let body = '';
   if (t && t.is_tshirt) {
-    body = `${designPick('f', t.id, it.design, it.custom)}<span class="lbl">Размер</span>${pick('f-size', t.sizes, it.size)}
+    body = `${designPick('f', it)}<span class="lbl">Размер</span>${pick('f-size', t.sizes, it.size)}
       <span class="lbl">Цвят</span>${pick('f-color', t.colors, it.color)}`;
   } else if (it.typeId === 'custom') {
     body = `<label class="lbl" for="f-name">Име на продукта</label><input class="field" id="f-name" value="${e(it.name)}" autocomplete="off">
@@ -1550,6 +1576,7 @@ function formTotal() {
 function addDraft() {
   const it = F.edit, t = typeOf(it.typeId);
   if (!it.typeId) return 'Избери продукт.';
+  if (t && t.is_tshirt && designMissing(it)) return designMissing(it);
   if (t && t.is_tshirt && (!it.size || !it.color)) return 'Избери размер и цвят.';
   if (it.typeId === 'custom') {
     if (!it.name.trim()) return 'Напиши име на продукта.';
@@ -1765,6 +1792,7 @@ document.addEventListener('click', async ev => {
     case 'ie-open': UI.armed = null; return startItemEdit(b.dataset.order, id || null);
     case 'ie-cancel': UI.itemEdit = null; return renderPop();
     case 'ie-save': return saveItemEdit();
+    case 'ie-dpick': UI.itemEdit.draft.design = v; UI.itemEdit.draft.dq = v; return renderPop();
     case 'ie-size': UI.itemEdit.draft.size = v; return renderPop();
     case 'ie-color': UI.itemEdit.draft.color = v; return renderPop();
     case 'ie-qty': UI.itemEdit.draft.qty = Math.max(1, UI.itemEdit.draft.qty + Number(v)); return renderPop();
@@ -1945,6 +1973,7 @@ document.addEventListener('click', async ev => {
     case 'f-brand': F.brand = v; return renderForm();
     case 'f-channel': F.channel = v; return renderForm();
     case 'f-account': F.account = v; return renderForm();
+    case 'f-dpick': F.edit.design = v; F.edit.dq = v; return renderForm();
     case 'f-size': F.edit.size = v; return renderForm();
     case 'f-color': F.edit.color = v; return renderForm();
     case 'f-qty': F.edit.qty = Math.max(1, F.edit.qty + Number(v)); return renderForm();
@@ -1976,6 +2005,7 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
+  if (/^(f|ie)-dq$/.test(ev.target.id)) return designTyped(ev.target);
   const t = ev.target;
   if (UI.leaveEdit) {
     const k = { 'lv-start': 'start', 'lv-end': 'end', 'lv-note': 'note' }[t.id];
@@ -2014,8 +2044,7 @@ document.addEventListener('change', ev => {
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
     if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note, price: d.price }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
-    if (t.id === 'ie-design') { UI.itemEdit.draft.design = t.value; return; }
-    if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; UI.itemEdit.draft.design = ''; return renderPop(); }
+    if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; UI.itemEdit.draft.design = ''; UI.itemEdit.draft.dq = ''; return renderPop(); }
     if (/^ie-/.test(t.id)) return;
   }
   if (UI.task) {
@@ -2028,8 +2057,7 @@ document.addEventListener('change', ev => {
     if (t.id === 'f-type') { const keep = F.edit.qty; F.edit = blankItem(); F.edit.typeId = t.value; F.edit.qty = keep; return renderForm(); }
     if (t.id === 'f-urgent') { F.urgent = t.checked; return; }
     if (t.id === 'f-confirm') { F.confirm = t.checked; return; }
-    if (t.id === 'f-design') { F.edit.design = t.value; return; }
-    if (t.id === 'f-custom') { F.edit.custom = t.checked; F.edit.design = ''; return renderForm(); }
+    if (t.id === 'f-custom') { F.edit.custom = t.checked; F.edit.design = ''; F.edit.dq = ''; return renderForm(); }
     return;
   }
   if (t.dataset.field === 'price') { const v = parsePrice(t.value); t.value = priceInput(v); return act(() => api.update('orders', t.dataset.id, { price: v })); }
