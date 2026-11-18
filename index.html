@@ -350,7 +350,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1832';
+const VERSION = '20261118-1846';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -2379,12 +2379,12 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (t.id === 'rt-custom' && UI.retEdit) { Object.assign(UI.retEdit, { custom: t.checked, design: '', dq: '' }); return renderPop(); }
   if (UI.leaveEdit && t.id === 'lv-user') { UI.leaveEdit.draft.user_id = t.value; return renderPop(); }
   if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
     if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note, price: d.price }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
-    if (t.id === 'rt-custom' && UI.retEdit) { Object.assign(UI.retEdit, { custom: t.checked, design: '', dq: '' }); return renderPop(); }
     if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; UI.itemEdit.draft.design = ''; UI.itemEdit.draft.dq = ''; return renderPop(); }
     if (/^ie-/.test(t.id)) return;
   }
