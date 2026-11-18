@@ -328,7 +328,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1648';
+const VERSION = '20261118-1657';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -996,11 +996,13 @@ function viewSummary() {
 function viewDone() {
   const toSend = D.orders.filter(o => o.packed_at && !o.waybill_at).sort((a, b) => (b.urgent - a.urgent) || (a.packed_at < b.packed_at ? -1 : 1));
   const sent = D.orders.filter(o => o.waybill_at).sort((a, b) => (a.waybill_at < b.waybill_at ? 1 : -1));
+  const mode = UI.doneMode === 'sent' ? 'sent' : 'send';
+  const seg = (v, l, n) => `<button class="chip" data-act="done-mode" data-v="${v}" aria-pressed="${mode === v}">${l} (${n})</button>`;
   return `<div class="top"><h1>Готови <span class="h-n">(${toSend.length + sent.length})</span></h1></div>
-    <h2 class="sec">За изпращане <span class="h-n">(${toSend.length})</span></h2>
-    ${toSend.length ? toSend.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px 24px">Няма опаковани поръчки за изпращане.</p>'}
-    <h2 class="sec">Завършени · последните 30 дни <span class="h-n">(${sent.length})</span></h2>
-    ${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`;
+    <div class="seg">${seg('send', 'За изпращане', toSend.length)}${seg('sent', 'Завършени', sent.length)}</div>
+    ${mode === 'send'
+      ? (toSend.length ? toSend.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px 24px">Няма опаковани поръчки за изпращане.</p>')
+      : `${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`}`;
 }
 
 function viewMissing() {
@@ -1766,6 +1768,7 @@ document.addEventListener('click', async ev => {
     case 'brand': UI.brand = v; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.prodOpen = false; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
+    case 'done-mode': UI.doneMode = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
