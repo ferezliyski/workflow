@@ -337,7 +337,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1736';
+const VERSION = '20261118-1741';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -750,7 +750,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || F);
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || UI.stockEdit || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -1069,7 +1069,7 @@ function viewStock() {
       <button class="link" data-act="stock-undo" data-id="${m.id}">${UI.armed === 'mv:' + m.id ? 'Натисни пак' : 'Махни'}</button></div>`; }).join('') : '';
   return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
     <div class="top"><h1>Наличности</h1></div>
-    <div class="actions" style="margin:0 0 14px"><button class="btn" data-act="stock-open" data-v="load" style="flex:1">Заредихме</button><button class="btn ghost" data-act="stock-open" data-v="scrap" style="flex:1">Брак</button></div>
+    <div class="actions" style="margin:0 0 14px"><button class="btn" data-act="stock-open" data-v="load" style="flex:1">Зареждане</button><button class="btn ghost" data-act="stock-open" data-v="scrap" style="flex:1">Брак</button></div>
     ${blocks}
     ${moves ? `<section class="block"><h2><span>Последни зареждания и брак</span></h2>${moves}</section>` : ''}`;
 }
@@ -1085,8 +1085,8 @@ function stockPopHtml() {
     body += `<span class="lbl">Размер</span>${chips('stock-size', t.sizes, S.size)}<span class="lbl">Цвят</span>${chips('stock-color', t.colors, S.color)}
       <span class="lbl">Брой</span><div class="qty"><button type="button" data-act="stock-qty" data-v="-1" aria-label="По-малко">−</button><b>${S.qty}</b><button type="button" data-act="stock-qty" data-v="1" aria-label="Повече">+</button></div>`;
   }
-  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="stock" role="dialog" aria-modal="true" aria-label="${S.mode === 'load' ? 'Заредихме' : 'Брак'}">
-    <div class="pop-head"><b class="who">${S.mode === 'load' ? 'Заредихме' : 'Брак'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="stock" role="dialog" aria-modal="true" aria-label="${S.mode === 'load' ? 'Зареждане' : 'Брак'}">
+    <div class="pop-head"><b class="who">${S.mode === 'load' ? 'Зареждане' : 'Брак'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
     <div class="card-body">${body}<p class="err" role="alert">${e(S.err || '')}</p>
       ${t ? `<button class="btn wide" data-act="stock-save" ${S.busy ? 'disabled' : ''}>${S.mode === 'load' ? 'Добави към наличностите' : 'Махни от наличностите'}</button>` : ''}</div>
   </div></div>`;
