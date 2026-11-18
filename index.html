@@ -79,6 +79,14 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
+.mat-row{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:11px 0;border:0;border-bottom:1px solid var(--line);background:none;color:var(--ink);font:inherit;text-align:left}
+.mat-row:last-child{border-bottom:0}
+.mat-q{min-width:46px;padding:4px 8px;border-radius:8px;text-align:center;font-size:16px;font-variant-numeric:tabular-nums}
+.mat-q.low{background:#f6c445;color:#1b1b1b}
+.mat-q.neg{background:var(--accent);color:var(--on-accent)}
+.mat-in{display:flex;align-items:center;gap:10px;margin-top:8px}
+.mat-in label{flex:1;font-weight:700;font-size:14px}
+.mat-in .field{width:90px;flex:none;text-align:center}
 .ret{margin-top:4px;color:#1f8a4c;font-weight:800;font-size:13px}
 :root[data-theme="dark"] .ret{color:#4cc27f}
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ret{color:#4cc27f}}
@@ -342,7 +350,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1806';
+const VERSION = '20261118-1832';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -395,6 +403,13 @@ function realApi() {
     },
     // returns still on the shelf, and the ones used in the last 30 days
     async loadReturns() { return ok(await sb.from('returns').select('*').or(`used_at.is.null,used_at.gte.${new Date(Date.now() - 30 * 864e5).toISOString()}`).order('created_at')); },
+    async loadMaterials() {
+      const [lv, mv] = await Promise.all([sb.from('material_levels').select('*').order('sort').order('name'),
+        sb.from('material_moves').select('*').order('created_at', { ascending: false }).limit(15)]);
+      return { list: ok(lv), moves: ok(mv) };
+    },
+    async addMaterialMoves(rows) { ok(await sb.from('material_moves').insert(rows)); },
+    async removeMaterialMove(id) { ok(await sb.from('material_moves').delete().eq('id', id)); },
     async loadStock() { return ok(await sb.from('stock_levels').select('*')); },
     async stockMoves() { return ok(await sb.from('stock_moves').select('*').in('kind', ['load', 'scrap', 'count']).order('created_at', { ascending: false }).limit(15)); },
     async addStock(rows) { ok(await sb.from('stock_moves').insert(rows)); },
@@ -762,7 +777,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || UI.stockEdit || UI.retEdit || F);
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || UI.stockEdit || UI.retEdit || UI.matEdit || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -802,6 +817,15 @@ function renderPop() {
     return;
   }
   UI.workPerson = null;
+  if (UI.matEdit && UI.tab === 'materials' && UI.mat && UI.mat.list) {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'mat' ? prev.scrollTop : 0;
+    box.innerHTML = matPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.matEdit = null;
   if (UI.retEdit && UI.tab === 'returns') {
     const prev = box.querySelector('.pop-in');
     const keepY = prev && prev.dataset.kind === 'ret' ? prev.scrollTop : 0;
@@ -1117,6 +1141,70 @@ function viewReturns() {
       : '<p class="empty">Няма върнати тениски.</p>'}
     ${used.length ? `<section class="block"><h2><span>Използвани</span></h2>${used.map(r => { const o = orderOfItem(r.used_item_id);
       return `<div class="miss-row"><span><b>${label(r)}</b><br><span class="small muted">${o ? `→ #${o.num} ${e(o.customer || '')} · ` : ''}${e(day(r.used_at))}</span></span></div>`; }).join('')}</section>` : ''}`;
+}
+function viewMaterials() {
+  const M = UI.mat;
+  if (!M || !M.list) return `<button class="link back" data-act="tab" data-v="profile">← Профил</button><div class="top"><h1>Материали</h1></div><p class="empty">${M && M.err ? e(M.err) : 'Зареждам…'}</p>`;
+  const nameOfMat = id => { const m = M.list.find(x => x.id === id); return m ? m.name : '?'; };
+  const rows = M.list.map(m => `<button class="mat-row" data-act="mat-edit" data-id="${m.id}"><span><b>${e(m.name)}</b>${m.low ? `<br><span class="small muted">предупреждение под ${m.low}</span>` : ''}</span>
+    <b class="mat-q ${m.qty <= 0 ? 'neg' : m.qty < m.low ? 'low' : ''}">${m.qty}</b></button>`).join('');
+  const moves = M.moves.map(x => `<div class="miss-row"><span><b>${x.delta > 0 ? '+' : ''}${x.delta} · ${e(nameOfMat(x.material_id))}</b><br><span class="small muted">${x.kind === 'load' ? 'Заредено' : 'Инвентаризация'} · ${e(nameOf(x.created_by) || '')} · ${e(day(x.created_at))}</span></span>
+    <button class="link" data-act="mat-undo" data-id="${x.id}">${UI.armed === 'mm:' + x.id ? 'Натисни пак' : 'Махни'}</button></div>`).join('');
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Материали <span class="h-n">(${M.list.length})</span></h1><button class="fbtn" data-act="mat-new">+ Материал</button></div>
+    ${M.list.length ? `<div class="actions" style="margin:0 0 14px"><button class="btn" data-act="mat-open" data-v="load" style="flex:1">Зареждане</button><button class="btn ghost" data-act="mat-open" data-v="count" style="flex:1">Инвентаризация</button></div>
+      <section class="block">${rows}</section>` : '<p class="empty">Още няма материали.</p>'}
+    ${moves ? `<section class="block"><h2><span>Последни зареждания и инвентаризации</span></h2>${moves}</section>` : ''}`;
+}
+function matPopHtml() {
+  const E = UI.matEdit, M = UI.mat;
+  let title, body, btn;
+  if (E.mode === 'item') {
+    title = E.id ? 'Материал' : 'Нов материал'; btn = 'Запази';
+    body = `<label class="lbl" for="mat-name">Име</label><input class="field" id="mat-name" value="${e(E.name)}" autocomplete="off">
+      <label class="lbl" for="mat-low">Предупреждение под (бр.)</label><input class="field" id="mat-low" inputmode="numeric" value="${e(E.low)}" autocomplete="off">
+      ${E.id ? `<div class="actions"><button class="btn danger" data-act="mat-del">${UI.armed === 'mat:' + E.id ? 'Натисни пак, за да изтриеш' : 'Изтрий материала'}</button></div>` : ''}`;
+  } else {
+    title = E.mode === 'load' ? 'Зареждане' : 'Инвентаризация'; btn = E.mode === 'load' ? 'Добави към наличностите' : 'Запази наличностите';
+    body = M.list.map(m => `<div class="mat-in"><label for="mi-${m.id}">${e(m.name)}</label><input class="field" id="mi-${m.id}" data-mat="${m.id}" inputmode="numeric" value="${e(E.vals[m.id] != null ? E.vals[m.id] : '')}" autocomplete="off"></div>`).join('');
+  }
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="mat" role="dialog" aria-modal="true" aria-label="${e(title)}">
+    <div class="pop-head"><b class="who">${e(title)}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">${body}<p class="err" role="alert">${e(E.err || '')}</p><button class="btn wide" data-act="mat-save" ${E.busy ? 'disabled' : ''}>${btn}</button></div>
+  </div></div>`;
+}
+async function loadMaterials() {
+  try { UI.mat = await api.loadMaterials(); } catch (x) { UI.mat = { err: 'Не успях да заредя. Провери интернета.' }; }
+  if (UI.tab === 'materials') render();
+}
+async function saveMaterial() {
+  const E = UI.matEdit, M = UI.mat;
+  const num = v => { const t = String(v == null ? '' : v).trim(); if (t === '') return null; const n = Number(t); return Number.isInteger(n) && n >= 0 ? n : NaN; };
+  try {
+    if (E.mode === 'item') {
+      const name = E.name.trim(), low = num(E.low) == null ? 0 : num(E.low);
+      if (!name) { E.err = 'Напиши име.'; return renderPop(); }
+      if (Number.isNaN(low)) { E.err = 'Пиши само цели числа.'; return renderPop(); }
+      E.busy = true; renderPop();
+      if (E.id) await api.update('materials', E.id, { name, low });
+      else await api.insert('materials', { name, low, sort: M.list.length + 1 });
+      toast(E.id ? 'Запазено' : 'Материалът е добавен');
+    } else {
+      const rows = [];
+      for (const m of M.list) {
+        const n = num(E.vals[m.id]); if (n == null) continue;
+        if (Number.isNaN(n)) { E.err = 'Пиши само цели числа.'; return renderPop(); }
+        const d = E.mode === 'load' ? n : n - m.qty;
+        if (d) rows.push({ material_id: m.id, delta: d, kind: E.mode, created_by: me.id });
+      }
+      if (!rows.length) { UI.matEdit = null; renderPop(); return toast(E.mode === 'load' ? 'Попълни поне едно число.' : 'Няма промени'); }
+      E.busy = true; renderPop();
+      await api.addMaterialMoves(rows);
+      toast(E.mode === 'load' ? 'Заредено' : 'Наличностите са обновени');
+    }
+  } catch (x) { E.busy = false; E.err = 'Не успях да запазя. Провери интернета и опитай пак.'; return renderPop(); }
+  UI.matEdit = null; renderPop();
+  await loadMaterials();
 }
 function retPopHtml() {
   const R = UI.retEdit, tees = D.types.filter(t => t.is_tshirt), t = tees.find(x => x.id === R.typeId);
@@ -1590,7 +1678,7 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button><button class="btn dark wide" data-act="tab" data-v="returns" style="margin-top:8px">Returns${(D.returns || []).some(r => !r.used_at) ? ` (${D.returns.filter(r => !r.used_at).length})` : ''}</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button><button class="btn dark wide" data-act="tab" data-v="returns" style="margin-top:8px">Returns${(D.returns || []).some(r => !r.used_at) ? ` (${D.returns.filter(r => !r.used_at).length})` : ''}</button><button class="btn dark wide" data-act="tab" data-v="materials" style="margin-top:8px">Материали</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1679,8 +1767,8 @@ function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, returns: viewReturns, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock', 'returns'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, returns: viewReturns, materials: viewMaterials, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock', 'returns', 'materials'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1960,12 +2048,12 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; UI.retEdit = null; if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; UI.retEdit = null; UI.matEdit = null; if (v === 'materials') setTimeout(loadMaterials, 0); if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; return render();
@@ -1974,7 +2062,7 @@ document.addEventListener('click', async ev => {
     case 'done-mode': UI.doneMode = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.retEdit) { UI.retEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.retEdit) { UI.retEdit = null; return renderPop(); } if (UI.matEdit) { UI.matEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'prod-open': UI.prodOpen = !UI.prodOpen; return renderPop();
     case 'prod-sub': UI.prod = v; UI.sub = b.dataset.sub; UI.prodOpen = false; return render();
@@ -2165,6 +2253,23 @@ document.addEventListener('click', async ev => {
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
     case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
+    case 'mat-new': UI.matEdit = { mode: 'item', id: null, name: '', low: '', err: '' }; return renderPop();
+    case 'mat-edit': { const m = UI.mat.list.find(x => x.id === id); if (!m) return; UI.matEdit = { mode: 'item', id, name: m.name, low: m.low ? String(m.low) : '', err: '' }; return renderPop(); }
+    case 'mat-open': { const vals = {}; if (v === 'count') UI.mat.list.forEach(m => { vals[m.id] = String(m.qty); }); UI.matEdit = { mode: v, vals, err: '' }; return renderPop(); }
+    case 'mat-save': return saveMaterial();
+    case 'mat-del': {
+      const E = UI.matEdit;
+      if (UI.armed !== 'mat:' + E.id) { UI.armed = 'mat:' + E.id; return renderPop(); }
+      UI.armed = null;
+      try { await api.remove('materials', E.id); } catch (x) { return toast('Не успях. Провери интернета.'); }
+      UI.matEdit = null; renderPop(); toast('Материалът е изтрит'); return loadMaterials();
+    }
+    case 'mat-undo': {
+      if (UI.armed !== 'mm:' + id) { UI.armed = 'mm:' + id; return render(); }
+      UI.armed = null;
+      try { await api.removeMaterialMove(Number(id)); } catch (x) { return toast('Не успях. Провери интернета.'); }
+      toast('Махнато'); return loadMaterials();
+    }
     case 'ret-open': { const tees = D.types.filter(t => t.is_tshirt); UI.retEdit = { typeId: tees.length ? tees[0].id : '', design: '', dq: null, custom: false, size: '', color: '', qty: 1, err: '' }; return renderPop(); }
     case 'ret-type': Object.assign(UI.retEdit, { typeId: v, design: '', dq: null, custom: false, size: '', color: '', err: '' }); return renderPop();
     case 'rt-dpick': UI.retEdit.design = v; UI.retEdit.dq = v; setDList('rt', ''); return renderPop();
@@ -2234,6 +2339,11 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
+  if (UI.matEdit) {
+    if (ev.target.dataset.mat) { UI.matEdit.vals[ev.target.dataset.mat] = ev.target.value; return; }
+    if (ev.target.id === 'mat-name') { UI.matEdit.name = ev.target.value; return; }
+    if (ev.target.id === 'mat-low') { UI.matEdit.low = ev.target.value; return; }
+  }
   if (ev.target.dataset.stock != null && UI.stockEdit) { UI.stockEdit.vals[ev.target.dataset.stock] = ev.target.value; return; }
   if (/^(f|ie|rt)-dq$/.test(ev.target.id)) return designTyped(ev.target);
   if (ev.target.id === 'rt-dname' && UI.retEdit) { UI.retEdit.design = ev.target.value; return; }

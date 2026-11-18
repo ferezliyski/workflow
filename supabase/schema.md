@@ -25,6 +25,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
 - **stock_moves**: id, product_type_id, size, color, delta (+ in, − out), kind ('load' | 'scrap' | 'press' | 'count' = inventory difference), item_id (for 'press'), created_by, created_at. Every change of the blank stock is a row. Members can insert and delete only 'load', 'scrap' and 'count' rows (as themselves); 'press' rows come from a trigger.
 - **stock_levels** (view, security invoker): product_type_id, size, color, qty (= sum of delta), loaded (the cell had a load). Every t-shirt type is counted from 0.
 - **returns**: id, product_type_id, design, size, color, created_by, created_at, used_item_id, used_at, used_by. Made t-shirts that came back. Every member can read and write. Realtime on.
+- **materials** (id, name, low, sort) and **material_moves** (id, material_id, delta, kind 'load' | 'count', created_by, created_at), view **material_levels** (security invoker: materials + qty). Packaging stock, counted by hand only; nothing uses it automatically. Every member can read and write.
 - **item_stages**: id, item_id, stage_key, name, kind, sort, done_at/by. Each item gets its own copy of its stages.
 - **order_notes**: id, order_id, body, author, created_at
 - **tasks**: id, title, note, due, urgent, assignee, created_by, order_id, done_at/by, created_at, updated_at

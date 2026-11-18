@@ -89,6 +89,7 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - **Returns** (Profile → "Returns"): made t-shirts that came back (not collected, or swapped). "Добави" picks model, design (same searchable list, or a personal design), size, colour and count.
   - An open order whose not-yet-pressed t-shirt matches a free return (same model, design, size, colour; oldest order first) shows "↩ Има в Returns" on its card, needs no blank and never waits for a size.
   - In the order, "↩ Вземи от Returns" links the return to the item and marks all its stages done (no blank is taken). "Върни" undoes it.
+- **Материали** (Profile): packaging stock with no rules. "+ Материал" (name, warning threshold); "Зареждане" adds, "Инвентаризация" sets the counted numbers (stores the difference); yellow under the threshold, red at 0 or below. Not shown in the orders. Automatic use per order was discussed and dropped (rules are not fixed).
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
   2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):

@@ -10,7 +10,7 @@
   ['t0','t1','t2','t3','t4'].forEach(t => add(t, ['design?', 'approval?', 'print', 'press']));
   add('t5', ['design','approval','print_pages','print_covers','assemble']); add('t6', ['design','assemble']); add('t7', ['design','print']);
   add('t8', ['design','approval','cutfile','cut','print']); add('t9', ['design','cutfile','cut','print']);
-  const db = { returns: [], stock_moves: [], leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
+  const db = { materials: [], material_moves: [], returns: [], stock_moves: [], leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
   [['brand','Slash'],['brand','Meivi'],['channel','TikTok'],['channel','Instagram'],['channel','Messenger'],['channel','Viber'],['channel','Сайт'],['channel','Телефон'],['account','Meivi'],['account','Auto'],['account','Inlove'],['account','Zodiac']].forEach((o, i) => db.options.push({ id: id(), kind: o[0], value: o[1], sort: i }));
   let logged = false, num = 0, rt = null;
   const calls = { load: 0, syncSince: 0, loadOrders: 0, loadConfig: 0, loadAll: 0, bytes: 0 };
@@ -58,6 +58,9 @@
       return [...out.values()];
     },
     async loadStock() { return levels(); },
+    async loadMaterials() { return { list: db.materials.map(x => ({ id: x.id, name: x.name, low: x.low || 0, sort: x.sort, qty: db.material_moves.filter(y => y.material_id === x.id).reduce((a, y) => a + y.delta, 0) })), moves: db.material_moves.slice().reverse().slice(0, 15).map(x => ({ ...x })) }; },
+    async addMaterialMoves(rows) { rows.forEach(r => db.material_moves.push({ id: ++mv, created_at: now(), ...r })); },
+    async removeMaterialMove(i) { db.material_moves = db.material_moves.filter(x => x.id !== i); },
     async loadReturns() { return db.returns.map(r => ({ ...r })); },
     async stockMoves() { return db.stock_moves.filter(m => m.kind === 'load' || m.kind === 'scrap' || m.kind === 'count').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
     async addStock(rows) { rows.forEach(r => db.stock_moves.push({ id: ++mv, created_at: now(), ...r })); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
@@ -116,6 +119,7 @@
       db[t] = db[t].filter(r => r.id !== i);
       if (t === 'orders') { const its = db.items.filter(x => x.order_id === i).map(x => x.id); db.items = db.items.filter(x => x.order_id !== i); db.item_stages = db.item_stages.filter(s => !its.includes(s.item_id)); db.order_notes = db.order_notes.filter(x => x.order_id !== i); }
       if (t === 'items') db.item_stages = db.item_stages.filter(s => s.item_id !== i);
+      if (t === 'materials') db.material_moves = db.material_moves.filter(x => x.material_id !== i);
       if (rt && !window.__silent) {
         if (t === 'orders') setTimeout(() => rt.orders({ eventType: 'DELETE', old: { id: i } }), 30);
         if (t === 'tasks') setTimeout(() => rt.tasks({ eventType: 'DELETE', old: { id: i } }), 30);
