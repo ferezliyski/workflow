@@ -1,0 +1,55 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SHOTS = os.path.join(ROOT, 'build', 'shots') + '/'
+os.makedirs(SHOTS, exist_ok=True)
+from playwright.sync_api import sync_playwright
+out=SHOTS
+def run(as_user):
+  with sync_playwright() as p:
+    b = p.chromium.launch(args=['--no-sandbox'])
+    page = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True, color_scheme='dark').new_page()
+    errs=[]; page.on('pageerror', lambda e: errs.append(str(e))); page.on('console', lambda m: errs.append(m.text) if m.type=='error' else None)
+    page.add_init_script(f"window.__asUser = '{as_user}';")
+    page.add_init_script(path=os.path.join(ROOT, 'build', 'mock.js'))
+    page.goto('file://' + os.path.join(ROOT, 'index.html')); page.wait_for_timeout(300)
+    page.fill('#a-email', 'a@b.bg'); page.fill('#a-pass', 'pass123'); page.click('#auth-form button[type=submit]'); page.wait_for_timeout(300)
+    page.click('[data-act=tab][data-v=profile]'); page.wait_for_timeout(150)
+    print(as_user, 'leave button:', page.locator('[data-act=tab][data-v=leave]').count())
+    if as_user != 'u1':
+        page.evaluate("document.querySelector('.tab[data-v=profile]').setAttribute('data-v','leave')"); page.click('.tab >> nth=3'); page.wait_for_timeout(300)
+        print('  member forced lands on:', page.inner_text('.top h1'), '| errors:', errs); b.close(); return
+    page.click('[data-act=tab][data-v=leave]'); page.wait_for_timeout(300)
+    print('  team:', [x.replace('\n',' — ') for x in page.locator('.group').nth(1).locator('.person').all_inner_texts()])
+    # set allowance for Гошо
+    page.click('.person[data-act=lv-person]:has-text("Гошо")'); page.wait_for_timeout(150)
+    page.fill('#al-days', '20'); page.locator('#al-days').blur(); page.wait_for_timeout(300)
+    page.fill('#al-carried', '3'); page.locator('#al-carried').blur(); page.wait_for_timeout(300)
+    print('  tiles:', [x.replace('\n',' ') for x in page.locator('.pop .tile').all_inner_texts()])
+    # add Christmas leave: Dec 21 - Jan 4 crosses holidays, weekend and the year boundary
+    page.click('.pop [data-act=lv-new]'); page.wait_for_timeout(150)
+    page.fill('#lv-start', '2026-12-21'); page.fill('#lv-end', '2027-01-04'); page.locator('#lv-end').blur(); page.wait_for_timeout(150)
+    print('  count shown:', page.inner_text('#lv-count'))
+    page.fill('#lv-note', 'Коледа'); page.click('[data-act=lv-save]'); page.wait_for_timeout(400)
+    print('  back in person popup:', page.locator('.pop-in').get_attribute('aria-label'), '| tiles:', [x.replace('\n',' ') for x in page.locator('.pop .tile').all_inner_texts()][:2])
+    print('  rows 2026:', page.locator('.pop .group .person').all_inner_texts())
+    page.click('.pop [data-act=lv-new]'); page.click('[data-act=lv-kind][data-v=sick]'); page.fill('#lv-start', '2026-12-22'); page.fill('#lv-end', '2026-12-23'); page.locator('#lv-end').blur(); page.wait_for_timeout(150)
+    print('  overlap warning:', page.locator('.pop .warn').count()); page.click('[data-act=lv-save]'); page.wait_for_timeout(400)
+    page.click('.pop-x'); page.wait_for_timeout(200)
+    print('  team after:', [x.replace('\n',' — ') for x in page.locator('.group').nth(1).locator('.person').all_inner_texts()])
+    print('  upcoming:', [x.replace('\n',' — ') for x in page.locator('.group').nth(0).locator('.person').all_inner_texts()])
+    page.click('[data-act=lv-month][data-v="1"]'); page.wait_for_timeout(150)
+    page.locator('.block').filter(has_text='декември').screenshot(path=out + 's29-cal.png')
+    cells = page.evaluate("[...document.querySelectorAll('.cal-c')].filter(c => c.querySelector('.cal-p')).map(c => c.querySelector('.cal-d').textContent + ':' + [...c.querySelectorAll('.cal-p')].map(x => x.textContent + '/' + x.className.split(' ')[1]).join(','))")
+    print('  December cells with people:', cells)
+    page.click('[data-act=lv-year][data-v="2027"]'); page.wait_for_timeout(150)
+    print('  2027 team:', [x.replace('\n',' — ') for x in page.locator('.group').nth(1).locator('.person').all_inner_texts()])
+    page.click('[data-act=lv-hols]'); page.wait_for_timeout(100); print('  holidays 2027:', page.locator('.hol').all_inner_texts())
+    page.click('[data-act=lv-ww][data-v="6"]'); page.wait_for_timeout(300); page.click('[data-act=lv-year][data-v="2026"]'); page.wait_for_timeout(150)
+    page.click('.person[data-act=lv-person]:has-text("Гошо")'); page.wait_for_timeout(150)
+    print('  with Saturdays, 2026 rows:', page.locator('.pop .group .person').all_inner_texts())
+    page.click('.pop .group .person >> nth=0'); page.wait_for_timeout(150); page.click('[data-act=lv-del]'); page.click('[data-act=lv-del]'); page.wait_for_timeout(400)
+    print('  after delete rows:', page.locator('.pop .group .person').all_inner_texts())
+    page.screenshot(path=out + 's30-leavepop.png')
+    print('  overflow:', page.evaluate('document.documentElement.scrollWidth > document.documentElement.clientWidth'), '| errors:', errs)
+    b.close()
+run('u1'); run('u2')

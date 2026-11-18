@@ -1,0 +1,43 @@
+import os
+ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+SHOTS = os.path.join(ROOT, 'build', 'shots') + '/'
+os.makedirs(SHOTS, exist_ok=True)
+from playwright.sync_api import sync_playwright
+out=SHOTS
+with sync_playwright() as p:
+    b = p.chromium.launch(args=['--no-sandbox'])
+    page = b.new_context(viewport={'width': 390, 'height': 844}, device_scale_factor=2, is_mobile=True, has_touch=True, color_scheme='dark').new_page()
+    errs = []; page.on('pageerror', lambda e: errs.append(str(e))); page.on('console', lambda m: errs.append(m.text) if m.type == 'error' else None)
+    page.add_init_script(path=os.path.join(ROOT, 'build', 'mock.js'))
+    page.goto('file://' + os.path.join(ROOT, 'index.html')); page.wait_for_timeout(300)
+    page.fill('#a-email', 'a@b.bg'); page.fill('#a-pass', 'pass123'); page.click('#auth-form button[type=submit]'); page.wait_for_timeout(300)
+    def order(name, brand, ch, items, confirm=True, urgent=False):
+        page.click('[data-act=new]'); page.fill('#f-customer', name); page.click(f'[data-act=f-brand][data-v={brand}]'); page.click(f'[data-act=f-channel][data-v="{ch}"]')
+        for (t, size, color) in items:
+            page.select_option('#f-type', label=t)
+            if size: page.click(f'[data-act=f-size][data-v="{size}"]'); page.click(f'[data-act=f-color][data-v="{color}"]')
+            page.click('[data-act=f-add]')
+        if not confirm: page.uncheck('#f-confirm')
+        if urgent: page.check('#f-urgent')
+        page.click('[data-act=f-save]'); page.wait_for_timeout(250)
+    order('Иван', 'Meivi', 'Messenger', [('Oversize Meivi', 'S', 'Бяла')], confirm=False)
+    order('Мария', 'Meivi', 'Viber', [('Специална книга', '', ''), ('Мъжка Meivi', 'L', 'Черна')], urgent=True)
+    order('Петър', 'Slash', 'Сайт', [('Oversize Slash', 'M', 'Черна')])
+    state = lambda: page.locator('.card').filter(has_text='Иван').inner_text().replace('\n', ' | ')
+    print('1:', state())
+    card = page.locator('.card').filter(has_text='Иван')
+    card.locator('.go').click(); page.wait_for_timeout(250); print('2:', state(), '|| toast:', page.inner_text('#toast').replace('\n', ' '))
+    page.click('#toast button'); page.wait_for_timeout(250); print('undo:', state())
+    card.locator('.go').click(); page.wait_for_timeout(250)
+    card.locator('.go').click(); page.wait_for_timeout(250); print('3:', state())
+    page.screenshot(path=out + 's8-new-list.png', full_page=True)
+    card.locator('.go').click(); page.wait_for_timeout(250); print('4:', state())
+    card.locator('.go').click(); page.wait_for_timeout(250)
+    print('active left:', page.inner_text('.top span'))
+    page.click('[data-act=tab][data-v=done]'); print('done:', page.locator('.card').first.inner_text().replace('\n', ' | '))
+    page.click('[data-act=tab][data-v=orders]')
+    pc = page.locator('.card').filter(has_text='Петър'); print('Петър:', pc.inner_text().replace('\n', ' | '))
+    pc.locator('.more').click(); page.wait_for_timeout(200)
+    page.screenshot(path=out + 's9-more.png', full_page=True)
+    print('overflow:', page.evaluate('document.documentElement.scrollWidth > document.documentElement.clientWidth'), '| errors:', errs)
+    b.close()

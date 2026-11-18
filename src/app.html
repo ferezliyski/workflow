@@ -1,0 +1,2034 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#101010" id="theme-color">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Workflow">
+<title>Workflow поръчки</title>
+<script>
+  // apply the saved theme before anything is drawn, so the screen does not flash
+  try { const t = localStorage.getItem('wf-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (x) { /* optional */ }
+</script>
+<style>
+:root{
+  /* Layout: one phone column, bottom tab bar, order cards with a contrasting header band; details open as a popup.
+     Palette: white, black and red, one step softer than pure so it stays lively without glaring. */
+  --bg:#F0EFEC; --surface:#FFFFFF; --ink:#161616; --soft:#5F5D59; --line:#D2CFCA;
+  --accent:#CB2B32; --on-accent:#FFFFFF; --tint:#EDEBE7;
+  --band:#1A1A1A; --on-band:#F7F5F1;
+  --bad:#B3222A; --bad-tint:#F9E3E3;
+  --next:#2E9A55; --photo:#C99A06;
+  --font:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
+    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
+    --band:#ECE9E4; --on-band:#151515;
+    --bad:#F58388; --bad-tint:#3A1B1C;
+    --next:#4CC174; --photo:#F2C230;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+    --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
+    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
+    --band:#ECE9E4; --on-band:#151515;
+    --bad:#F58388; --bad-tint:#3A1B1C;
+    --next:#4CC174; --photo:#F2C230;
+    color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+html,body{width:100%;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
+body{touch-action:pan-y}
+.scroll,.tbl-wrap{touch-action:pan-x pan-y;overscroll-behavior-x:contain}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 14.5px/1.45 var(--font);-webkit-tap-highlight-color:transparent}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+.wrap{max-width:640px;margin:0 auto;overflow-x:clip;padding:calc(14px + env(safe-area-inset-top, 0px)) 14px calc(170px + env(safe-area-inset-bottom, 0px))}
+.top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
+.fbtn{appearance:none;min-height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:13px}
+.fbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.h-n{font-weight:600;color:var(--soft)}
+.top-btns{display:flex;gap:8px}
+.search{display:flex;align-items:center;gap:8px;margin:-2px 0 12px}
+.search .field{flex:1}
+.fnow{display:flex;align-items:center;flex-wrap:wrap;gap:4px 8px;margin:-4px 0 12px;font-size:13px;color:var(--soft)}
+.fnow .link{padding:4px 2px;font-size:13px}
+.top h1{font-size:20px;font-weight:800;letter-spacing:-.01em}
+.top span{font-size:13px;color:var(--soft)}
+.muted{color:var(--soft)}
+.small{font-size:13px}
+.empty{padding:36px 8px;text-align:center;color:var(--soft)}
+
+/* inputs */
+.field{display:block;width:100%;padding:10px 12px;font-size:15px;background:var(--surface);border:1.5px solid var(--line);border-radius:10px}
+.field:focus{outline:none;border-color:var(--ink)}
+label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;color:var(--soft)}
+.btn{appearance:none;min-height:46px;padding:0 16px;font-size:14.5px;font-weight:700;border:0;border-radius:10px;background:var(--accent);color:var(--on-accent)}
+.btn.ghost{background:none;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
+.btn.danger{background:none;color:var(--bad);box-shadow:inset 0 0 0 1.5px var(--bad)}
+.btn.wide{width:100%}
+.btn:disabled{opacity:.5}
+.link{appearance:none;background:none;border:0;padding:8px 2px;color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{appearance:none;min-height:40px;padding:7px 13px;font-weight:600;font-size:13.5px;background:var(--surface);border:1.5px solid var(--line);border-radius:999px}
+.chip[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.chip .n{margin-left:6px;font-weight:800;opacity:.75}
+.scroll{display:flex;gap:8px;overflow-x:auto;padding:2px 14px 10px;margin:0 -14px;scrollbar-width:none}
+.scroll::-webkit-scrollbar{display:none}
+.scroll .chip{flex:none}
+.err{min-height:1.4em;margin-top:10px;font-weight:700;color:var(--bad)}
+
+/* order cards */
+.card{cursor:pointer;background:var(--surface);border:1.5px solid var(--line);border-radius:14px;margin-bottom:22px;overflow:hidden;box-shadow:0 2px 0 var(--line)}
+.card.urgent{border:2.5px solid var(--accent)}
+.card-top{padding:10px 14px;background:var(--band);color:var(--on-band)}
+.card-top .num,.card-top .src{color:var(--on-band);opacity:.72}
+.card-top .badge{background:none;color:var(--on-band);box-shadow:inset 0 0 0 1.5px var(--on-band)}
+.card-top .badge.urgent,.card-top .badge.late{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.card-top .badge.photo-req{background:#f2c94c;color:#1b1b1b;box-shadow:none}
+.notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.notice{background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.35);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
+.notice .ico{font-size:44px;line-height:1}
+.notice h2{font-size:24px;margin:10px 0 6px}
+.notice p{margin:0 0 18px;color:var(--soft)}
+td.miss{background:#f6c445;color:#1b1b1b;border-radius:6px;white-space:nowrap}
+.miss-note{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#fdf1cc;color:#3a2c00;font-weight:700;font-size:13px}
+.card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
+.nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.nosize-btn span{color:var(--soft);font-weight:600;font-size:13px}
+.miss-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.miss-row:last-child{border-bottom:0}
+.card-top .badge.bad{background:var(--on-band);color:var(--band);box-shadow:none}
+.prod{padding:10px 14px;border-top:1px solid var(--line)}
+.card-top + .prod{border-top:0}
+.prod-name{display:flex;justify-content:space-between;align-items:center;gap:10px;font-weight:700}
+.dots{display:inline-flex;gap:4px;flex:none}
+.dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--soft)}
+.dots i.on{background:var(--ink);border-color:var(--ink)}
+.now{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
+.now-txt{display:flex;flex-direction:column;line-height:1.2}
+.now-txt span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
+.now-txt b{font-size:15px;font-weight:800}
+.go{appearance:none;flex:none;min-width:92px;min-height:42px;padding:0 14px;border:0;border-radius:10px;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:14px}
+.go.wait{background:none;color:var(--ink);box-shadow:inset 0 0 0 2px var(--ink)}
+.ship{margin-top:8px;font-size:13.5px}
+a{color:var(--ink)}
+.ready{margin-top:6px;font-weight:700;color:var(--ink)}
+.ready.waiting{color:var(--next)}
+.more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
+.phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
+.viber{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:#7360F2;color:#FFFFFF;font-size:12.5px;font-weight:800;text-decoration:none}
+.copy{appearance:none;flex:none;min-height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:800}
+.inline .copy{min-height:44px;border-radius:10px}
+.phone-row .link{padding:4px 0;font-size:13px}
+.item-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.item-h .link{flex:none;padding:2px 0;font-size:13px}
+.ie-h{margin-top:10px;font-weight:800}
+.warn{margin-top:10px;font-weight:700;color:#B07F00}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:10px}
+.cal-h{font-size:11px;font-weight:700;color:var(--soft);text-align:center;padding-bottom:2px}
+.cal-c{min-height:46px;padding:3px;border-radius:6px;background:var(--tint);display:flex;flex-direction:column;align-items:flex-start;gap:2px;overflow:hidden}
+.cal-x{background:none}
+.cal-off{opacity:.45}
+.cal-today{box-shadow:inset 0 0 0 1.5px var(--ink)}
+.cal-d{font-size:11px;font-weight:700;color:var(--soft)}
+.cal-p{display:inline-block;padding:0 3px;border-radius:3px;font-size:10px;font-weight:800;line-height:14px;background:var(--ink);color:var(--bg)}
+.cal-p.unpaid{background:none;color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.cal-p.sick{background:var(--accent);color:var(--on-accent)}
+.cal-p.other{background:var(--soft);color:var(--bg)}
+.cal-key{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;margin-top:10px;font-size:11.5px;color:var(--soft)}
+.block h2 .link{padding:0 8px;font-size:20px;text-decoration:none}
+.hols{margin-top:6px}
+.hol{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.lv-field{flex:1;min-width:0}
+.lv-count{margin-top:8px;font-weight:700}
+.theme-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 2px 4px;font-size:13px;color:var(--soft)}
+.tchips{display:inline-flex;padding:2px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+.tchip{appearance:none;min-height:28px;padding:0 10px;border:0;border-radius:999px;background:none;color:var(--soft);font-size:12px;font-weight:700}
+.tchip[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.flist{border:1.5px solid var(--line);border-radius:12px;overflow:hidden}
+.frow{appearance:none;display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;min-height:44px;padding:0 14px;border:0;border-top:1px solid var(--line);background:var(--surface);color:var(--ink);text-align:left;font-size:14px;font-weight:600}
+.flist .frow:first-child{border-top:0}
+.frow[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
+.frow[aria-pressed="true"] .frow-n{color:inherit;opacity:.75}
+.frow.sub{padding-left:30px;font-weight:500;font-size:13.5px;min-height:40px}
+.frow.fold{border:1.5px solid var(--line);border-radius:12px}
+.frow-n{flex:none;font-size:12.5px;font-weight:700;color:var(--soft);font-variant-numeric:tabular-nums}
+.pills{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:12px}
+.pills.on-list{margin:-4px 0 12px}
+.pill{appearance:none;display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px 0 12px;border:0;border-radius:999px;background:var(--ink);color:var(--bg);font-size:12.5px;font-weight:700}
+.pill span{opacity:.7}
+.fnow-n{font-size:12.5px;color:var(--soft);margin-left:4px}
+.fdone{position:sticky;bottom:0;display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));background:var(--surface);border-top:1px solid var(--line)}
+.fdone .btn{flex:1}
+.sent{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-top:10px;font-weight:700;color:var(--next)}
+.sent .link{padding:2px 0;font-size:13px;color:var(--soft)}
+.btn.send{margin-top:10px}
+.sec{display:flex;align-items:baseline;gap:6px;margin:6px 2px 10px;font-size:14px;font-weight:800;letter-spacing:.02em}
+.star{margin-left:5px;color:#E0A100}
+.prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
+.prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
+.prev-row{appearance:none;display:block;width:100%;margin-top:6px;padding:0;border:0;background:none;color:var(--ink);text-align:left;font-size:13.5px}
+button.prev-row{text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line)}
+.phone-hint{margin-top:6px;color:#B07F00;font-weight:700}
+.phone-hint:empty{display:none}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+.tile{display:flex;flex-direction:column;gap:2px;padding:12px;border-radius:12px;background:var(--surface);border:1.5px solid var(--line)}
+.tile span{font-size:12px;font-weight:700;color:var(--soft)}
+.tile b{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+.tile small{font-size:12px;color:var(--soft)}
+.bars{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.bar-row{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:baseline}
+.bar-l{font-weight:700;font-size:13.5px;overflow-wrap:anywhere}
+.bar-v{font-size:13px;color:var(--soft);font-variant-numeric:tabular-nums}
+.bar-t{grid-column:1 / -1;height:8px;border-radius:4px;background:var(--tint)}
+.bar-t i{display:block;height:100%;border-radius:4px;background:var(--ink);opacity:.8}
+.back{display:inline-block;margin:-4px 0 4px;padding:6px 0;font-size:13.5px;text-decoration:none}
+.group{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:18px}
+.group h2{padding:9px 14px;font-size:12px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;background:var(--band);color:var(--on-band)}
+.group-toggle{appearance:none;display:flex;justify-content:space-between;width:100%;padding:12px 14px;border:0;background:none;color:var(--ink);font-weight:700;font-size:13.5px}
+.group-toggle span{color:var(--soft)}
+.task{display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border-top:1px solid var(--line)}
+.group h2 + .task{border-top:0}
+.tick{appearance:none;flex:none;display:grid;place-items:center;width:26px;height:26px;margin-top:1px;border-radius:50%;border:2px solid var(--soft);background:none;color:var(--on-accent);font-weight:900;font-size:14px;line-height:1}
+.tick.on{background:var(--next);border-color:var(--next)}
+.task-main{appearance:none;flex:1;min-width:0;padding:0;border:0;background:none;color:inherit;text-align:left}
+.task-title{display:block;font-weight:700;font-size:14.5px;overflow-wrap:anywhere}
+.task-meta{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;margin-top:4px;font-size:12.5px;color:var(--soft)}
+.task.done .task-title{text-decoration:line-through;color:var(--soft)}
+.late{color:var(--accent);font-weight:700}
+.task-h{margin-top:14px;font-size:17px;font-weight:800;overflow-wrap:anywhere}
+.task-note{margin-top:8px;white-space:pre-wrap}
+.person{appearance:none;display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:14px;border:0;border-top:1px solid var(--line);background:none;color:inherit;text-align:left;font-size:14.5px}
+.group h2 + .person{border-top:0}
+.person-n{flex:none;font-size:12.5px;color:var(--soft)}
+.tbadge{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:800;vertical-align:1px}
+.notes{border-top:1px solid var(--line)}
+.note{padding:8px 0;border-bottom:1px solid var(--line)}
+.note b{font-size:13px}
+.note time{margin-left:8px;font-size:12px;color:var(--soft)}
+.note p{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
+.toast{position:fixed;left:12px;right:12px;bottom:calc(84px + env(safe-area-inset-bottom, 0px));z-index:12;display:flex;align-items:center;justify-content:space-between;gap:12px;max-width:616px;margin:0 auto;padding:10px 10px 10px 16px;border-radius:12px;background:var(--ink);color:var(--bg);font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,.3)}
+.toast button{appearance:none;min-height:40px;padding:0 14px;border:0;border-radius:8px;background:var(--bg);color:var(--ink);font-weight:800}
+.row1{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 8px}
+.num{font-weight:800;color:var(--soft);font-variant-numeric:tabular-nums}
+.who{font-weight:800;font-size:15px}
+.src{font-size:13px;color:var(--soft)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.badge{padding:3px 8px;font-size:12px;font-weight:700;border-radius:6px;background:var(--tint);color:var(--ink)}
+.badge.urgent{background:var(--accent);color:var(--on-accent)}
+.badge.wait{background:none;box-shadow:inset 0 0 0 1.5px var(--soft);color:var(--soft)}
+.badge.bad{background:var(--bad-tint);color:var(--bad)}
+.badge.late{background:var(--accent);color:var(--on-accent)}
+.lines{list-style:none;margin:8px 0 0;padding:0;font-size:15px}
+.lines li{display:flex;justify-content:space-between;gap:10px;padding:3px 0}
+.lines em{flex:none;font-style:normal;font-weight:700;color:var(--soft)}
+.card-body{padding:2px 16px 18px}
+.pop{position:fixed;inset:0;z-index:9;display:flex;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.6)}
+.pop-in{width:100%;max-width:640px;max-height:88%;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;touch-action:pan-y;background:var(--surface);border-radius:18px 18px 0 0;padding-bottom:env(safe-area-inset-bottom, 0px)}
+.pop-head{position:sticky;top:0;z-index:1;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 12px 12px 16px;background:var(--band);color:var(--on-band)}
+.pop-head .num,.pop-head .src{color:var(--on-band);opacity:.72}
+.pop-x{appearance:none;flex:none;min-height:38px;padding:0 14px;border:0;border-radius:9px;background:var(--on-band);color:var(--band);font-weight:800;font-size:13.5px}
+.problem{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--bad-tint);color:var(--bad);font-weight:700}
+.item{margin-top:14px}
+.item h3{font-size:14.5px;font-weight:800}
+.steps{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin-top:8px}
+.step{appearance:none;display:inline-flex;flex-direction:column;align-items:flex-start;justify-content:center;min-height:50px;padding:7px 12px;text-align:left;background:var(--surface);border:1.5px solid var(--line);border-radius:10px;font-weight:700;font-size:13.5px}
+.step small{font-weight:500;font-size:11.5px;color:var(--soft)}
+.step.wait{border-style:dashed;border-color:var(--soft)}
+.step.done{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.step.done small{color:inherit;opacity:.75}
+.step.done b::before{content:"✓ "}
+.step.cur{border-color:var(--next)}
+.step.photo{border-style:dashed;border-color:var(--photo)}
+.step.photo.on{border-style:dashed;background:none;border-color:var(--photo);color:var(--photo)}
+.step.photo.on small{color:inherit}
+.sep{margin:16px 0 0;padding-top:12px;border-top:1.5px dashed var(--line)}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+
+/* summary */
+.seg{display:flex;gap:6px;margin-bottom:14px}
+.seg .chip{flex:1;padding:8px 6px;text-align:center}
+.block{background:var(--surface);border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.block h2{display:flex;justify-content:space-between;font-size:15px;font-weight:800}
+.tbl-wrap{overflow-x:auto;margin-top:8px}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 6px;text-align:center;border-bottom:1px solid var(--line);font-size:13.5px}
+th{font-size:12px;color:var(--soft)}
+td:first-child,th:first-child{text-align:left;font-weight:700}
+td.z{color:var(--line)}
+td.v{font-weight:800}
+.kv{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--line)}
+.kv:last-child{border-bottom:0}
+
+/* bottom bar */
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;justify-content:center;background:var(--surface);border-top:1.5px solid var(--line);padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 12px)}
+.bar-in{display:flex;width:100%;max-width:640px}
+.tab{appearance:none;flex:1;min-height:60px;padding:8px 2px;background:none;border:0;border-top:3px solid transparent;font-size:14px;font-weight:700;color:var(--soft)}
+.tab[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
+.fab{position:fixed;right:16px;bottom:calc(90px + env(safe-area-inset-bottom, 0px));transition:transform .15s;z-index:6;min-height:50px;padding:0 18px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:14.5px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+
+/* new order sheet */
+.sheet{position:fixed;inset:0;z-index:10;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;background:var(--bg)}
+.sheet-in{max-width:640px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top, 0px)) 14px calc(40px + env(safe-area-inset-bottom, 0px))}
+.sheet-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sheet-top h2{font-size:19px;font-weight:800}
+.draft{background:var(--surface);border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;margin-top:8px;display:flex;justify-content:space-between;gap:10px;align-items:center}
+.editor{background:var(--surface);border:1.5px solid var(--ink);border-radius:12px;padding:4px 12px 14px;margin-top:10px}
+.check{display:flex;align-items:center;gap:10px;margin-top:14px;font-weight:600}
+.check input{width:22px;height:22px;accent-color:var(--ink)}
+.qty{display:flex;align-items:center;gap:10px}
+.qty button{width:46px;height:46px;border-radius:10px;border:1.5px solid var(--line);background:var(--surface);font-size:22px;font-weight:700}
+.qty b{min-width:32px;text-align:center;font-size:17px}
+.inline{display:flex;gap:8px}
+.inline .field{flex:1}
+.auth{max-width:420px;margin:0 auto;padding:calc(40px + env(safe-area-inset-top, 0px)) 18px 40px}
+.auth h1{font-size:26px;font-weight:800;margin-bottom:4px}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="sheet"></div>
+<div id="pop"></div>
+<div id="toast"></div>
+<script>/*__SUPABASE_LIB__*/</script>
+<script>
+(() => {
+'use strict';
+const VERSION = '__VERSION__';
+const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
+
+/* ---------- data layer ---------- */
+function realApi() {
+  const sb = window.supabase.createClient(CFG.url, CFG.key);
+  const ok = r => { if (r.error) throw r.error; return r.data; };
+  return {
+    async session() { const { data } = await sb.auth.getSession(); return data.session ? data.session.user : null; },
+    async signIn(email, password) { return ok(await sb.auth.signInWithPassword({ email, password })).user; },
+    async signUp(email, password, name, code) {
+      const r = await sb.auth.signUp({ email, password, options: { data: { name, invite_code: code } } });
+      if (r.error) throw r.error;
+      return this.signIn(email, password);
+    },
+    async signOut() { await sb.auth.signOut(); },
+    async load() {
+      const since = new Date(Date.now() - 30 * 864e5).toISOString();
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history] = await Promise.all([
+        sb.from('members').select('*'),
+        sb.from('options').select('*').order('sort'),
+        sb.from('stage_defs').select('*').order('sort'),
+        sb.from('product_types').select('*').order('sort'),
+        sb.from('product_type_stages').select('*').order('sort'),
+        sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
+        sb.from('tasks').select('*').order('created_at'),
+        sb.from('order_notes').select('*').order('created_at'),
+        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty)').order('created_at')
+      ]);
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
+    },
+    // only what changed since a moment: orders (with their products and stages), tasks and notes
+    async syncSince(iso) {
+      const [orders, tasks, notes] = await Promise.all([
+        sb.from('orders').select('*, items(*, item_stages(*))').gte('updated_at', iso),
+        sb.from('tasks').select('*').gte('updated_at', iso),
+        sb.from('order_notes').select('*').gte('created_at', iso)
+      ]);
+      return { orders: ok(orders), tasks: ok(tasks), notes: ok(notes) };
+    },
+    async loadOrders(ids) { return ok(await sb.from('orders').select('*, items(*, item_stages(*))').in('id', ids)); },
+    async loadConfig() {
+      const [members, options, stageDefs, types, typeStages] = await Promise.all([
+        sb.from('members').select('*'), sb.from('options').select('*').order('sort'), sb.from('stage_defs').select('*').order('sort'),
+        sb.from('product_types').select('*').order('sort'), sb.from('product_type_stages').select('*').order('sort')
+      ]);
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
+    },
+    async workStats(from, to) { return ok(await sb.rpc('work_stats', { p_from: from, p_to: to })); },
+    async loadLeave() {
+      const [allowances, leaves, holidays, settings] = await Promise.all([
+        sb.from('leave_allowances').select('*'), sb.from('leaves').select('*').order('start_date'),
+        sb.from('holidays').select('*').order('day'), sb.from('app_settings').select('*')
+      ]);
+      return { allowances: ok(allowances), leaves: ok(leaves), holidays: ok(holidays), settings: ok(settings) };
+    },
+    async upsert(table, row) { ok(await sb.from(table).upsert(row)); },
+    async removeBy(table, col, val) { ok(await sb.from(table).delete().eq(col, val)); },
+    async loadAll() {
+      return ok(await sb.from('orders').select('*, items(*, item_stages(*))').order('created_at'));
+    },
+    async saveItem(p) { return ok(await sb.rpc('save_item', { p })); },
+    async createOrder(p) { return ok(await sb.rpc('create_order', { p })); },
+    async update(table, id, patch) { ok(await sb.from(table).update(patch).eq('id', id)); },
+    async insert(table, row) { ok(await sb.from(table).insert(row)); },
+    async remove(table, id) { ok(await sb.from(table).delete().eq('id', id)); },
+    subscribe(h) {
+      const on = (ch, table, fn) => ch.on('postgres_changes', { event: '*', schema: 'public', table }, fn);
+      let ch = sb.channel('workflow');
+      ch = on(ch, 'orders', h.orders);
+      ch = on(ch, 'tasks', h.tasks);
+      ch = on(ch, 'order_notes', h.notes);
+      ['members', 'options', 'product_types', 'product_type_stages'].forEach(t => { ch = on(ch, t, h.config); });
+      ch.subscribe(status => h.status(status));
+    }
+  };
+}
+const api = window.__mockApi || realApi();
+
+/* ---------- state ---------- */
+let me = null;
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
+const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+let F = null; // new-order form
+
+const $ = s => document.querySelector(s);
+const e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const day = d => d ? new Date(d).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' }) : '';
+const nameOf = id => (D.members.find(m => m.user_id === id) || {}).name || '';
+const opts = kind => D.options.filter(o => o.kind === kind);
+function themeNow() { try { return localStorage.getItem('wf-theme') || 'auto'; } catch (x) { return 'auto'; } }
+function setTheme(t) {
+  try { if (t === 'auto') localStorage.removeItem('wf-theme'); else localStorage.setItem('wf-theme', t); } catch (x) { /* optional */ }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const dark = t === 'dark' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  const m = document.getElementById('theme-color'); if (m) m.setAttribute('content', dark ? '#101010' : '#F0EFEC');
+}
+function themeRow() {
+  const cur = themeNow();
+  const c = (v, l) => `<button class="tchip" data-act="theme" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`;
+  return `<div class="theme-row"><span>Тема</span><span class="tchips">${c('auto', 'Авто')}${c('light', 'Светла')}${c('dark', 'Тъмна')}</span></div>`;
+}
+const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
+const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
+const notesOf = id => D.notes.filter(n => n.order_id === id);
+// international form for Viber: 0888… → +359888…
+function intlPhone(p) {
+  let d = String(p || '').trim().replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) return d;
+  if (d.startsWith('00')) return '+' + d.slice(2);
+  if (d.startsWith('359')) return '+' + d;
+  if (d.startsWith('0')) return '+359' + d.slice(1);
+  return d ? '+' + d : '';
+}
+// opens viber:// without leaving the app: on a computer through a hidden frame (the page stays), on a phone directly
+const isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+function openExternal(url) { window.__lastViber = url; window.location.href = url; }
+const viberLink = p => `viber://chat?number=${encodeURIComponent(intlPhone(p))}`;
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (x) { /* older way below */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (x) { return false; }
+}
+const shipName = o => (o.recipient || '').trim() || o.customer || '';
+function phoneKey(p) {
+  let d = String(p || '').replace(/\D/g, '');
+  if (d.startsWith('00359')) d = '0' + d.slice(5);
+  else if (d.startsWith('359')) d = '0' + d.slice(3);
+  return d.length >= 6 ? d : '';
+}
+const otherOrders = o => { const k = phoneKey(o.phone); return k ? D.history.filter(h => h.id !== o.id && phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : []; };
+const star = o => otherOrders(o).length ? '<span class="star" title="Поръчвал е и преди" aria-label="Поръчвал е и преди">★</span>' : '';
+const money = v => v == null || v === '' ? '' : `${Number(v).toFixed(2).replace('.', ',')} €`;
+const priceInput = v => v == null ? '' : String(v).replace('.', ',');
+function parsePrice(v) {
+  const t = String(v || '').trim().replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '');
+  if (!t) return null;
+  const n = Number(t);
+  return isFinite(n) ? Math.round(n * 100) / 100 : null;
+}
+const today = () => new Date().toISOString().slice(0, 10);
+
+/* ---------- order logic ---------- */
+const stagesOf = it => (it.item_stages || []).slice().sort((a, b) => a.sort - b.sort);
+function itemState(it) {
+  if (it.photo_at) return { code: 'photo', label: 'На снимане' };
+  const next = stagesOf(it).find(s => !s.done_at);
+  if (!next) return { code: 'ready', label: 'Готов' };
+  return next.kind === 'wait' ? { code: 'wait', label: 'Чака клиента', key: next.stage_key } : { code: 'work', label: next.name, key: next.stage_key };
+}
+const itemsOf = o => (o.items || []).slice().sort((a, b) => a.sort - b.sort);
+const unconfirmed = o => o.needs_confirm && !o.confirmed_at;
+function orderTags(o) {
+  if (o.waybill_at) return ['Изпратена'];
+  if (unconfirmed(o)) return ['Чака клиента'];
+  const states = itemsOf(o).map(itemState);
+  if (states.every(s => s.code === 'ready')) return [o.packed_at ? 'За товарителница' : 'За опаковане'];
+  return [...new Set(states.filter(s => s.code !== 'ready').map(s => s.label))];
+}
+const isLate = o => o.due && !o.waybill_at && o.due < today();
+const activeOrders = () => D.orders.filter(o => !o.waybill_at).sort((a, b) =>
+  (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1));
+const itemLabel = it => [it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, it.size, it.color].filter(Boolean).join(' · ');
+
+/* ---------- views ---------- */
+function viewAuth() {
+  const up = UI.authMode === 'up';
+  return `<div class="auth">
+    <h1>Workflow</h1>
+    <p class="muted">Поръчките на екипа на едно място.</p>
+    <div class="seg" style="margin-top:22px">
+      <button class="chip" data-act="auth-mode" data-v="in" aria-pressed="${!up}">Вход</button>
+      <button class="chip" data-act="auth-mode" data-v="up" aria-pressed="${up}">Нов профил</button>
+    </div>
+    <form id="auth-form" novalidate>
+      ${up ? `<label class="lbl" for="a-name">Име</label><input class="field" id="a-name" autocomplete="name">` : ''}
+      <label class="lbl" for="a-email">Имейл</label><input class="field" id="a-email" type="email" autocomplete="email" autocapitalize="none">
+      <label class="lbl" for="a-pass">Парола</label><input class="field" id="a-pass" type="password" autocomplete="${up ? 'new-password' : 'current-password'}">
+      ${up ? `<label class="lbl" for="a-code">Код за достъп на екипа</label><input class="field" id="a-code" autocapitalize="characters" autocomplete="off">` : ''}
+      <p class="err" role="alert">${e(UI.authErr)}</p>
+      <button class="btn wide" type="submit" ${UI.busy ? 'disabled' : ''}>${up ? 'Създай профил' : 'Влез'}</button>
+    </form>
+  </div>`;
+}
+
+function nowRow(label, kind, act, id, btn) {
+  return `<div class="now"><p class="now-txt"><span>${kind === 'wait' ? 'Чака' : 'За'}</span><b>${e(label)}</b></p>
+    <button class="go ${kind === 'wait' ? 'wait' : ''}" data-act="${act}" data-id="${id}">${e(btn)}</button></div>`;
+}
+function dots(it, waiting) {
+  return `<span class="dots ${waiting ? 'waiting' : ''}" aria-hidden="true">${stagesOf(it).map(s => `<i class="${s.done_at ? 'on' : ''}"></i>`).join('')}</span>`;
+}
+function cardHtml(o) {
+  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
+  const badges = [
+    o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
+    isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
+    o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
+    ...sizeWaitItems(o).map(it => `<span class="badge nosize">⚠ Няма размер ${e([it.size, it.color].filter(Boolean).join(' '))}</span>`),
+    o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : '',
+    notesOf(o.id).length ? `<span class="badge">Бележки: ${notesOf(o.id).length}</span>` : ''
+  ].join('');
+  const items = itemsOf(o);
+  const done = !!o.waybill_at;
+  const allReady = items.every(it => itemState(it).code === 'ready');
+  let rows = items.map(it => {
+    const st = itemState(it), next = stagesOf(it).find(x => !x.done_at);
+    let action = '';
+    if (done) action = '';
+    else if (unconfirmed(o)) action = '';
+    else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
+    else if (st.code === 'ready') action = allReady ? '' : '<p class="ready waiting">✓ Готов</p>';
+    else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
+    return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
+  }).join('');
+  let orderRow = '';
+  if (done) orderRow = `<p class="ready">✓ Завършена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
+  else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
+  else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
+  else if (allReady) orderRow = nowRow('Изпращане', 'work', 'send-open', o.id, 'Изпрати') +
+    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
+  return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
+    <div class="card-top">
+      <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
+      ${badges ? `<div class="badges">${badges}</div>` : ''}
+    </div>
+    ${rows}${orderRow ? `<div class="prod">${orderRow}</div>` : ''}
+  </article>`;
+}
+
+function stepBtn(act, id, label, doneAt, doneBy, cls) {
+  return `<button class="step ${cls || ''} ${doneAt ? 'done' : ''}" data-act="${act}" data-id="${id}" aria-pressed="${!!doneAt}">
+    <b>${e(label)}</b>${doneAt ? `<small>${e(nameOf(doneBy))} · ${e(day(doneAt))}</small>` : ''}</button>`;
+}
+
+function itemEditorHtml(o) {
+  const IE = UI.itemEdit, d = IE.draft, t = typeOf(d.typeId);
+  const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
+  let body = '';
+  if (t && t.is_tshirt) {
+    body = `<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
+      <span class="lbl">Цвят</span>${pick('ie-color', t.colors, d.color)}
+      <label class="check"><input type="checkbox" id="ie-custom" ${d.custom ? 'checked' : ''}>Дизайн по желание на клиента</label>`;
+  } else if (d.typeId === 'custom') {
+    body = `<label class="lbl" for="ie-name">Име на продукта</label><input class="field" id="ie-name" value="${e(d.name)}" autocomplete="off">
+      <span class="lbl">Етапи</span>
+      <div class="chips">${D.stageDefs.map(x => `<button type="button" class="chip" data-act="ie-stage" data-v="${x.key}" aria-pressed="${d.stages.some(y => y.key === x.key)}">${e(x.name)}</button>`).join('')}
+      ${d.stages.filter(x => x.key === 'custom').map(x => `<button type="button" class="chip" data-act="ie-stage-x" data-v="${e(x.name)}" aria-pressed="true">${e(x.name)} ✕</button>`).join('')}</div>
+      <div class="inline" style="margin-top:10px"><input class="field" id="ie-extra" value="${e(d.extra)}" autocomplete="off"><button type="button" class="btn ghost" data-act="ie-stage-add">Добави етап</button></div>`;
+  }
+  const reset = IE.itemId && needsReset(IE);
+  return `<div class="editor" id="ie-box">
+    <p class="ie-h">${IE.itemId ? 'Промяна на продукт' : 'Нов продукт в поръчката'}</p>
+    <label class="lbl" for="ie-type">Продукт</label>
+    <select class="field" id="ie-type"><option value="">Избери…</option>
+      ${D.types.map(x => `<option value="${x.id}" ${d.typeId === x.id ? 'selected' : ''}>${e(x.name)}</option>`).join('')}
+      <option value="custom" ${d.typeId === 'custom' ? 'selected' : ''}>Друго</option></select>
+    ${body}
+    ${d.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ie-qty" data-v="-1" aria-label="По-малко">−</button><b>${d.qty}</b><button type="button" data-act="ie-qty" data-v="1" aria-label="Повече">+</button></div>
+      <label class="lbl" for="ie-note">Бележка за продукта</label><input class="field" id="ie-note" value="${e(d.note)}" autocomplete="off">` : ''}
+    ${reset ? '<p class="warn">Етапите на този продукт ще започнат отначало.</p>' : ''}
+    <p class="err" role="alert">${e(IE.err || '')}</p>
+    <div class="actions"><button class="btn" data-act="ie-save">Запази</button><button class="btn ghost" data-act="ie-cancel">Отказ</button></div>
+    ${IE.itemId ? `<div class="actions"><button class="btn danger" data-act="ie-del">${UI.armed === 'item:' + IE.itemId ? 'Натисни пак, за да махнеш продукта' : 'Махни продукта от поръчката'}</button></div>` : ''}
+  </div>`;
+}
+function startItemEdit(orderId, itemId) {
+  const o = findOrder(orderId), it = itemId && itemsOf(o).find(x => x.id === itemId);
+  const draft = blankItem();
+  if (it) {
+    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, custom: it.custom_design, note: it.note,
+      stages: stagesOf(it).map(x => ({ key: x.stage_key, name: x.name, kind: x.kind, sort: x.sort })) });
+  }
+  UI.itemEdit = { orderId, itemId: it ? it.id : null, draft, orig: it ? { typeId: draft.typeId, custom: draft.custom, stages: draft.stages.map(x => x.name).join('|') } : null, err: '' };
+  renderPop();
+  setTimeout(() => { const b = $('#ie-box'); if (b) b.scrollIntoView({ block: 'nearest' }); }, 30);
+}
+function needsReset(IE) {
+  const d = IE.draft, o = IE.orig;
+  if (!o) return true;
+  if (d.typeId !== o.typeId) return true;
+  if (d.typeId === 'custom') return d.stages.map(x => x.name).join('|') !== o.stages;
+  return !!d.custom !== !!o.custom;
+}
+async function saveItemEdit() {
+  const IE = UI.itemEdit, d = IE.draft, t = typeOf(d.typeId);
+  if (!d.typeId) { IE.err = 'Избери продукт.'; return renderPop(); }
+  if (t && t.is_tshirt && (!d.size || !d.color)) { IE.err = 'Избери размер и цвят.'; return renderPop(); }
+  if (d.typeId === 'custom' && !d.name.trim()) { IE.err = 'Напиши име на продукта.'; return renderPop(); }
+  if (d.typeId === 'custom') d.stages.sort((a, b) => a.sort - b.sort);
+  const reset = needsReset(IE);
+  try {
+    await api.saveItem({
+      id: IE.itemId || '', order_id: IE.orderId, product_type_id: d.typeId === 'custom' ? '' : d.typeId,
+      name: d.typeId === 'custom' ? d.name.trim() : t.name, is_tshirt: !!(t && t.is_tshirt),
+      size: t && t.is_tshirt ? d.size : '', color: t && t.is_tshirt ? d.color : '', qty: d.qty,
+      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), reset_stages: reset, stages: draftStages(d)
+    });
+    UI.itemEdit = null;
+    toast(IE.itemId ? 'Продуктът е променен' : 'Продуктът е добавен');
+    await refresh(true);
+  } catch (x) { IE.err = 'Не успях да запазя. Провери интернета и опитай пак.'; renderPop(); }
+}
+
+function bodyHtml(o) {
+  const items = itemsOf(o).map(it => {
+    const st = stagesOf(it);
+    const next = st.find(s => !s.done_at);
+    const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'cur' : ''}`)).join('');
+    const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
+      <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
+    if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
+    return `<div class="item"><div class="item-h"><h3>${e(itemLabel(it))}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
+      ${it.custom_design ? '<p class="small muted">Дизайн по желание на клиента</p>' : ''}
+      ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
+      <div class="steps">${steps}${photo}</div></div>`;
+  }).join('') + (UI.itemEdit && UI.itemEdit.orderId === o.id && !UI.itemEdit.itemId
+    ? `<div class="item">${itemEditorHtml(o)}</div>`
+    : (o.waybill_at ? '' : `<button class="btn ghost" data-act="ie-open" data-order="${o.id}" style="margin-top:12px">+ Добави продукт</button>`));
+  const armed = UI.armed === o.id;
+  return `<div class="card-body">
+    ${UI.editPhone === o.id
+      ? `<label class="lbl" for="ph-${o.id}">Телефон</label><div class="inline"><input class="field" id="ph-${o.id}" data-field="phone" data-id="${o.id}" type="tel" value="${e(o.phone)}" autocomplete="off"><button class="btn" data-act="phone-done" data-id="${o.id}">Запази</button></div>`
+      : `<p class="phone-row">${o.phone ? `Телефон: <a href="tel:${e(o.phone.replace(/[^\d+]/g, ''))}">${e(o.phone)}</a>` : '<span class="muted">Няма телефон</span>'}
+        ${o.phone ? `<button class="copy" data-act="copy" data-v="${e(o.phone.replace(/[^\d+]/g, ''))}">Копирай</button><a class="viber" href="${e(viberLink(o.phone))}">Отвори във Viber</a>` : ''}
+        <button class="link" data-act="phone-edit" data-id="${o.id}">${o.phone ? 'Редактирай' : 'Добави'}</button></p>`}
+    ${otherOrders(o).length ? `<div class="prev"><p class="prev-h">★ Други поръчки на клиента</p>${otherOrders(o).map(h => {
+      const st = h.waybill_at ? `Изпратена ${e(day(h.waybill_at))}${h.tracking ? ' · ' + e(h.tracking) : ''}` : 'Активна';
+      const inner = `<b>#${h.num}</b> · ${e(day(h.created_at))} · ${st}${h.price != null ? ' · ' + e(money(h.price)) : ''}`;
+      return findOrder(h.id) ? `<button class="prev-row" data-act="open" data-id="${h.id}">${inner}</button>` : `<p class="prev-row">${inner}</p>`;
+    }).join('')}</div>` : ''}
+    <label class="lbl" for="rcp-${o.id}">Име за доставка</label>
+    <div class="inline"><input class="field" id="rcp-${o.id}" data-field="recipient" data-id="${o.id}" value="${e(o.recipient || '')}" autocomplete="off"><button class="copy" data-act="copy" data-v="${e(shipName(o))}">Копирай</button></div>
+    <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
+    <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
+    <label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
+    <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">
+    ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
+    ${o.needs_confirm ? `<div class="steps" style="margin-top:12px">${stepBtn('confirm', o.id, 'Клиентът потвърди по телефона', o.confirmed_at, o.confirmed_by, 'wait')}</div>` : ''}
+    ${items}
+    <div class="sep"><div class="steps">
+      ${stepBtn('pack', o.id, 'Опаковано', o.packed_at, o.packed_by)}
+    </div></div>
+    <label class="lbl" for="trk-${o.id}">Номер на товарителница</label>
+    <input class="field" id="trk-${o.id}" data-field="tracking" data-id="${o.id}" value="${e(o.tracking)}" inputmode="text" autocomplete="off">
+    ${o.waybill_at
+      ? `<p class="sent">✓ Завършена · ${e(nameOf(o.waybill_by) || '')} · ${e(day(o.waybill_at))} <button class="link" data-act="unsend" data-id="${o.id}">Върни</button></p>`
+      : `<button class="btn wide send" data-act="send" data-id="${o.id}">Изпрати</button>
+         ${o.phone ? '' : '<p class="small muted" style="margin-top:6px">Няма телефон за Viber.</p>'}`}
+    <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
+    <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" autocomplete="off">
+    <span class="lbl">Бележки</span>
+    <div class="notes">${notesOf(o.id).map(n => `<div class="note"><b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
+    <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
+    <div class="actions">
+      <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
+      ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
+      <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
+      <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
+    </div>
+    <p class="small muted" style="margin-top:10px">Въведена от ${e(nameOf(o.created_by) || '—')} на ${e(day(o.created_at))}</p>
+  </div>`;
+}
+
+// Freeze the page behind a popup or the form. iPhones ignore overflow:hidden on the body,
+// so the body is pinned in place and its scroll position restored on close.
+let lockY = null;
+function lockPage() {
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || F);
+  const st = document.body.style;
+  if (on && lockY === null) {
+    lockY = window.scrollY;
+    st.position = 'fixed'; st.top = `-${lockY}px`; st.left = '0'; st.right = '0';
+  } else if (!on && lockY !== null) {
+    st.position = ''; st.top = ''; st.left = ''; st.right = '';
+    window.scrollTo(0, lockY);
+    lockY = null;
+  }
+}
+function renderPop() {
+  const box = $('#pop');
+  if (UI.fopen && UI.tab === 'orders') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'filters' ? prev.scrollTop : 0;
+    box.innerHTML = filterPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.fopen = false;
+  if (UI.tab === 'leave' && LV && !LV.err && (UI.leaveEdit || UI.leavePerson)) {
+    const kind = UI.leaveEdit ? 'leave-edit' : 'leave';
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === kind ? prev.scrollTop : 0;
+    box.innerHTML = UI.leaveEdit ? leaveEditHtml() : leavePersonHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  if (UI.workPerson && UI.tab === 'work') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'work' ? prev.scrollTop : 0;
+    box.innerHTML = workPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.workPerson = null;
+  if (UI.task) {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'task' ? prev.scrollTop : 0;
+    box.innerHTML = taskPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  const o = UI.open && findOrder(UI.open);
+  if (!o) { UI.open = null; box.innerHTML = ''; lockPage(); return; }
+  lockPage();
+  const prev = box.querySelector('.pop-in');
+  const keepY = prev ? prev.scrollTop : 0;
+  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
+  box.innerHTML = `<div class="pop" data-act="close-pop"><div class="pop-in" role="dialog" aria-modal="true" aria-label="Поръчка ${o.num}">
+    <div class="pop-head"><div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
+      <button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    ${bodyHtml(o)}
+  </div></div>`;
+  box.querySelector('.pop-in').scrollTop = keepY;
+}
+
+// Products can be grouped (all t-shirt models sit under "Тениски")
+const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
+const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
+// Missing sizes: stored as options of kind "missing", value "typeId|size|colour" (empty colour = every colour)
+const missingList = () => opts('missing').map(o => { const [typeId, size, color] = o.value.split('|'); return { id: o.id, typeId, size, color: color || '' }; });
+const missingFor = it => { const t = typeOfItem(it); return t && missingList().find(m => m.typeId === t.id && m.size === it.size && (!m.color || m.color === it.color)); };
+// an order waits for a size while a product that is not yet made uses a missing size
+const sizeWaitItems = o => o.packed_at || o.waybill_at ? [] : itemsOf(o).filter(it => itemState(it).code !== 'ready' && missingFor(it));
+const waitsSize = o => sizeWaitItems(o).length > 0;
+const missingLabel = m => { const t = D.types.find(x => x.id === m.typeId); return [t ? t.name : '?', m.size, m.color || 'всички цветове'].join(' · '); };
+function filterData() {
+  const everything = activeOrders().filter(o => !o.packed_at && !waitsSize(o));
+  // store filter first; everything below is counted within the chosen store
+  const brandCounts = {};
+  everything.forEach(o => { if (o.brand) brandCounts[o.brand] = (brandCounts[o.brand] || 0) + 1; });
+  const brands = [...opts('brand').map(x => x.value).filter(v => brandCounts[v]), ...Object.keys(brandCounts).filter(v => !opts('brand').some(x => x.value === v))];
+  if (UI.brand !== 'all' && !brands.includes(UI.brand)) brands.push(UI.brand);
+  const all = UI.brand === 'all' ? everything : everything.filter(o => o.brand === UI.brand);
+  const rank = n => { const i = D.types.findIndex(t => (t.grp || t.name) === n); return i < 0 ? 99 : i; };
+  const prodCounts = {};
+  all.forEach(o => [...new Set(itemsOf(o).map(groupOf))].forEach(n => { prodCounts[n] = (prodCounts[n] || 0) + 1; }));
+  const prods = Object.keys(prodCounts).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+  if (UI.prod !== 'all' && !prods.includes(UI.prod)) prods.push(UI.prod);
+  const inGroup = UI.prod === 'all' ? all : all.filter(o => itemsOf(o).some(it => groupOf(it) === UI.prod));
+  // models inside the chosen group (e.g. the t-shirt types)
+  const subCounts = {};
+  if (UI.prod !== 'all') inGroup.forEach(o => [...new Set(itemsOf(o).filter(it => groupOf(it) === UI.prod).map(it => it.name))].forEach(n => { subCounts[n] = (subCounts[n] || 0) + 1; }));
+  const subs = Object.keys(subCounts).sort((a, b) => D.types.findIndex(t => t.name === a) - D.types.findIndex(t => t.name === b));
+  const hasSubs = subs.length > 1 || (subs.length === 1 && subs[0] !== UI.prod);
+
+  const list = UI.sub === 'all' ? inGroup : inGroup.filter(o => itemsOf(o).some(it => it.name === UI.sub));
+  const counts = {};
+  list.forEach(o => orderTags(o).forEach(t => { counts[t] = (counts[t] || 0) + 1; }));
+  const order = ['Чака клиента', ...D.stageDefs.map(s => s.name), 'На снимане', 'За опаковане', 'За товарителница'];
+  if (UI.filter !== 'all' && !counts[UI.filter]) counts[UI.filter] = 0;
+  const tags = Object.keys(counts).sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
+  const staged = UI.filter === 'all' ? list : list.filter(o => orderTags(o).includes(UI.filter));
+  const urgentN = staged.filter(o => o.urgent).length, lateN = staged.filter(isLate).length;
+  const shown = staged.filter(o => (!UI.onlyUrgent || o.urgent) && (!UI.onlyLate || isLate(o)));
+  // models of every group, so a model can be picked straight from the product list
+  const models = {};
+  all.forEach(o => itemsOf(o).forEach(it => { const g = groupOf(it); if (g !== it.name) { (models[g] = models[g] || {}); models[g][it.name] = (models[g][it.name] || new Set()).add(o.id); } }));
+  return { everything, brands, brandCounts, all, prods, prodCounts, inGroup, subs, subCounts, hasSubs, list, tags, counts, staged, urgentN, lateN, shown, models };
+}
+
+const activeFilters = () => {
+  const out = [];
+  if (UI.filter !== 'all') out.push({ k: 'filter', label: UI.filter });
+  if (UI.brand !== 'all') out.push({ k: 'brand', label: UI.brand });
+  if (UI.prod !== 'all') out.push({ k: 'prod', label: UI.sub !== 'all' ? UI.sub : UI.prod });
+  if (UI.onlyUrgent) out.push({ k: 'urgent', label: 'Спешни' });
+  if (UI.onlyLate) out.push({ k: 'late', label: 'Закъснели' });
+  return out;
+};
+const pills = () => activeFilters().map(x => `<button class="pill" data-act="f-drop" data-v="${x.k}" aria-label="Махни ${e(x.label)}">${e(x.label)} <span aria-hidden="true">✕</span></button>`).join('');
+
+function filterPopHtml() {
+  const f = filterData();
+  const row = (act, v, label, n, on, cls) => `<button class="frow ${cls || ''}" data-act="${act}" data-v="${e(v)}" aria-pressed="${on}"><span>${e(label)}</span><span class="frow-n">${n}</span></button>`;
+  // 1. stage: the most used filter, as a plain list in the order work flows
+  const stages = row('filter', 'all', 'Всички етапи', f.list.length, UI.filter === 'all') + f.tags.map(t => row('filter', t, t, f.counts[t], UI.filter === t)).join('');
+  // 2. store: a small switch
+  const seg = (v, l, n) => `<button class="chip" data-act="brand" data-v="${e(v)}" aria-pressed="${UI.brand === v}">${e(l)}<span class="n">${n}</span></button>`;
+  const stores = f.brands.length > 1 ? `<div class="seg">${seg('all', 'Всички', f.everything.length)}${f.brands.map(n => seg(n, n, f.brandCounts[n] || 0)).join('')}</div>` : '';
+  // 3. product: folded until needed; models sit under their group
+  const prodLabel = UI.prod === 'all' ? 'Всички продукти' : (UI.sub !== 'all' ? UI.sub : UI.prod);
+  const prodList = row('prod', 'all', 'Всички продукти', f.all.length, UI.prod === 'all') + f.prods.map(n => {
+    const ms = f.models[n] ? Object.keys(f.models[n]).sort((a, b) => D.types.findIndex(t => t.name === a) - D.types.findIndex(t => t.name === b)) : [];
+    return row('prod', n, n, f.prodCounts[n] || 0, UI.prod === n && UI.sub === 'all') +
+      (ms.length > 1 ? ms.map(m => `<button class="frow sub" data-act="prod-sub" data-v="${e(n)}" data-sub="${e(m)}" aria-pressed="${UI.prod === n && UI.sub === m}"><span>${e(m)}</span><span class="frow-n">${f.models[n][m].size}</span></button>`).join('') : '');
+  }).join('');
+  const toggle = (act, label, n, on) => `<button class="chip" data-act="${act}" aria-pressed="${on}">${e(label)}<span class="n">${n}</span></button>`;
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="filters" role="dialog" aria-modal="true" aria-label="Филтри">
+    <div class="pop-head"><b class="who">Филтри</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      ${activeFilters().length ? `<div class="pills">${pills()}</div>` : ''}
+      <span class="lbl">Етап</span><div class="flist">${stages}</div>
+      ${stores ? `<span class="lbl">Магазин</span>${stores}` : ''}
+      <span class="lbl">Продукт</span>
+      <button class="frow fold" data-act="prod-open" aria-expanded="${UI.prodOpen}"><span>${e(prodLabel)}</span><span class="frow-n">${UI.prodOpen ? 'Скрий' : 'Избери'}</span></button>
+      ${UI.prodOpen ? `<div class="flist">${prodList}</div>` : ''}
+      <span class="lbl">Само</span>
+      <div class="chips">${toggle('only-urgent', 'Спешни', f.urgentN, UI.onlyUrgent)}${toggle('only-late', 'Закъснели', f.lateN, UI.onlyLate)}</div>
+    </div>
+    <div class="fdone">
+      ${activeFilters().length ? '<button class="btn ghost" data-act="f-clear">Изчисти</button>' : ''}
+      <button class="btn" data-act="close-pop" data-x="1">Покажи ${f.shown.length} ${f.shown.length === 1 ? 'поръчка' : 'поръчки'}</button>
+    </div>
+  </div></div>`;
+}
+
+let allOrders = null, allLoading = false;
+async function loadAllOrders() {
+  if (allLoading || allOrders) return;
+  allLoading = true;
+  try { allOrders = await api.loadAll(); } catch (x) { /* fall back to what is loaded */ }
+  allLoading = false;
+  if (UI.searching) updateResults();
+}
+function searchPool() {
+  const map = new Map((allOrders || []).map(o => [o.id, o]));
+  D.orders.forEach(o => map.set(o.id, o));
+  return [...map.values()];
+}
+const norm = v => String(v == null ? '' : v).toLowerCase();
+function haystack(o) {
+  const parts = [o.num, '#' + o.num, o.customer, o.recipient, o.phone, String(o.phone || '').replace(/\D/g, ''), o.address,
+    o.price != null ? priceInput(o.price) + ' ' + o.price : '', o.brand, o.channel, o.account, o.note, o.problem, o.tracking,
+    ...(o.items || []).map(it => [it.name, it.size, it.color, it.note].join(' ')),
+    ...notesOf(o.id).map(n => n.body)];
+  return norm(parts.join(' '));
+}
+function searchOrders(q) {
+  const terms = norm(q).split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+  return searchPool().filter(o => { const h = haystack(o); return terms.every(t => h.includes(t)); })
+    .sort((a, b) => (!!a.waybill_at - !!b.waybill_at) || (b.num - a.num));
+}
+function resultsHtml() {
+  const list = searchOrders(UI.q);
+  const head = `<p class="fnow">${list.length ? `${list.length} ${list.length === 1 ? 'резултат' : 'резултата'}` : 'Нищо не е намерено.'}${allOrders ? '' : ' Търся и в по-старите поръчки…'}</p>`;
+  return head + list.map(cardHtml).join('');
+}
+function updateResults() {
+  const box = $('#olist');
+  if (box && UI.searching && UI.q.trim()) box.innerHTML = resultsHtml();
+  else if (box && UI.searching) render();
+}
+
+function viewOrders() {
+  const waiting = activeOrders().filter(waitsSize);
+  if (UI.noSize) {
+    if (!waiting.length) UI.noSize = false;
+    else return `<button class="link back" data-act="nosize" data-v="">← Поръчки</button>
+      <div class="top"><h1>Чакат размер <span class="h-n">(${waiting.length})</span></h1><button class="fbtn" data-act="tab" data-v="missing">Липсващи</button></div>
+      <p class="small muted" style="margin-bottom:10px">Връщат се в списъка сами, когато махнеш размера от „Липсващи размери“.</p>
+      ${waiting.map(cardHtml).join('')}`;
+  }
+  const f = filterData();
+  const active = activeFilters().length;
+  const searching = UI.searching && UI.q.trim();
+  return `<div class="top"><h1>Поръчки <span class="h-n">(${f.everything.length})</span></h1><span class="top-btns">
+      <button class="fbtn ${UI.searching ? 'on' : ''}" data-act="search">Търси</button>
+      <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></span></div>
+    ${UI.searching ? `<div class="search"><input class="field" id="q" type="search" value="${e(UI.q)}" placeholder="Име, телефон, адрес, номер, продукт…" autocomplete="off" enterkeyhint="search"><button class="link" data-act="search-x">Затвори</button></div>` : ''}
+    <div id="olist">${searching ? resultsHtml() : `
+    ${waiting.length ? `<button class="nosize-btn" data-act="nosize" data-v="1">⚠ Чакат размер (${waiting.length})<span>Виж ›</span></button>` : ''}
+    ${active ? `<div class="pills on-list">${pills()}<span class="fnow-n">${f.shown.length} от ${f.everything.length}</span></div>` : ''}
+    ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`}</div>`;
+}
+
+function viewSummary() {
+  const mode = UI.sumMode;
+  const tees = [], other = {};
+  activeOrders().forEach(o => itemsOf(o).forEach(it => {
+    const s = itemState(it);
+    if (it.is_tshirt) {
+      const st = stagesOf(it);
+      const pressed = st.some(x => x.stage_key === 'press' && x.done_at);
+      const stuck = unconfirmed(o);
+      const hit = mode === 'all' ? !pressed : (!stuck && s.code === 'work' && s.key === mode);
+      if (hit) tees.push(it);
+    } else if (s.code !== 'ready') {
+      const label = unconfirmed(o) ? 'Чака клиента' : s.label;
+      (other[it.name] = other[it.name] || {})[label] = ((other[it.name] || {})[label] || 0) + it.qty;
+    }
+  }));
+  const models = [...new Set([...D.types.filter(t => t.is_tshirt).map(t => t.name), ...tees.map(t => t.name)])];
+  const blocks = models.map(m => {
+    const mine = tees.filter(t => t.name === m);
+    if (!mine.length) return '';
+    const type = D.types.find(t => t.name === m) || { sizes: [], colors: [] };
+    const sizes = [...new Set([...type.sizes, ...mine.map(t => t.size)])].filter(Boolean);
+    const colors = [...new Set([...type.colors, ...mine.map(t => t.color)])].filter(c => mine.some(t => t.color === c));
+    const total = mine.reduce((a, t) => a + t.qty, 0);
+    const rows = colors.map(c => `<tr><td>${e(c || '—')}</td>${sizes.map(sz => {
+      const here = mine.filter(t => t.color === c && t.size === sz), n = here.reduce((a, t) => a + t.qty, 0);
+      return n && here.some(missingFor) ? `<td class="v miss" title="Липсва">⚠${n}</td>` : `<td class="${n ? 'v' : 'z'}">${n || '·'}</td>`;
+    }).join('')}</tr>`).join('');
+    const lack = mine.filter(missingFor), lackN = lack.reduce((a, t) => a + t.qty, 0);
+    const lackTxt = [...new Set(lack.map(t => [t.size, t.color].filter(Boolean).join(' ')))].join(', ');
+    return `<section class="block"><h2><span>${e(m)}</span><span>${total} бр.</span></h2>
+      <div class="tbl-wrap"><table><thead><tr><th>Цвят</th>${sizes.map(s => `<th>${e(s)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${lackN ? `<p class="miss-note">⚠ Липсват ${lackN} бр.: ${e(lackTxt)}</p>` : ''}</section>`;
+  }).join('');
+  const otherHtml = Object.keys(other).map(n => `<section class="block"><h2><span>${e(n)}</span></h2>
+    ${Object.keys(other[n]).map(l => `<div class="kv"><span>${e(l)}</span><b>${other[n][l]} бр.</b></div>`).join('')}</section>`).join('');
+  const seg = (v, l) => `<button class="chip" data-act="sum-mode" data-v="${v}" aria-pressed="${mode === v}">${l}</button>`;
+  return `<div class="top"><h1>За правене</h1><span>${tees.reduce((a, t) => a + t.qty, 0)} бр. с размер</span></div>
+    <div class="seg">${seg('all', 'Общо')}${seg('print', 'За печат')}${seg('press', 'За щамповане')}</div>
+    ${blocks || '<p class="empty">Няма тениски и худита за този етап.</p>'}
+    ${otherHtml ? `<h2 style="margin:18px 0 10px;font-size:16px">Други продукти</h2>${otherHtml}` : ''}`;
+}
+
+function viewDone() {
+  const toSend = D.orders.filter(o => o.packed_at && !o.waybill_at).sort((a, b) => (b.urgent - a.urgent) || (a.packed_at < b.packed_at ? -1 : 1));
+  const sent = D.orders.filter(o => o.waybill_at).sort((a, b) => (a.waybill_at < b.waybill_at ? 1 : -1));
+  return `<div class="top"><h1>Готови <span class="h-n">(${toSend.length + sent.length})</span></h1></div>
+    <h2 class="sec">За изпращане <span class="h-n">(${toSend.length})</span></h2>
+    ${toSend.length ? toSend.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px 24px">Няма опаковани поръчки за изпращане.</p>'}
+    <h2 class="sec">Завършени · последните 30 дни <span class="h-n">(${sent.length})</span></h2>
+    ${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`;
+}
+
+function viewMissing() {
+  const M = UI.miss || (UI.miss = { typeId: '', size: '', color: '' });
+  const types = D.types.filter(t => (t.sizes || []).length);
+  if (!types.some(t => t.id === M.typeId)) M.typeId = types.length ? types[0].id : '';
+  const t = types.find(x => x.id === M.typeId);
+  if (t && !t.sizes.includes(M.size)) M.size = t.sizes[0] || '';
+  if (t && M.color && !(t.colors || []).includes(M.color)) M.color = '';
+  const count = m => activeOrders().filter(o => sizeWaitItems(o).some(it => missingFor(it) && missingFor(it).id === m.id)).length;
+  const list = missingList();
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Липсващи размери</h1></div>
+    <section class="block">
+      <label class="lbl" for="ms-type">Вид</label><select class="field" id="ms-type">${types.map(x => `<option value="${x.id}" ${x.id === M.typeId ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</select>
+      <div class="actions" style="margin-top:0">
+        <div style="flex:1"><label class="lbl" for="ms-size">Размер</label><select class="field" id="ms-size">${(t ? t.sizes : []).map(x => `<option ${x === M.size ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="lbl" for="ms-color">Цвят</label><select class="field" id="ms-color"><option value="" ${!M.color ? 'selected' : ''}>Всички</option>${(t ? t.colors || [] : []).map(x => `<option ${x === M.color ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn wide" data-act="miss-add" style="margin-top:10px">Добави като липсващ</button>
+    </section>
+    <section class="block"><h2><span>Липсват сега</span></h2>
+      ${list.length ? list.map(m => { const n = count(m); return `<div class="miss-row"><span><b>${e(missingLabel(m))}</b><br><span class="small muted">${n ? `${n} ${n === 1 ? 'поръчка чака' : 'поръчки чакат'}` : 'няма чакащи поръчки'}</span></span><button class="btn ghost" data-act="miss-del" data-id="${m.id}">Заредихме</button></div>`; }).join('') : '<p class="empty" style="margin:8px 0 0">Няма липсващи размери.</p>'}
+    </section>`;
+}
+
+function viewSettings() {
+  const listBlock = (kind, title) => `<section class="block"><h2><span>${title}</span></h2>
+    <div class="chips" style="margin-top:10px">${opts(kind).map(o => `<button class="chip" data-act="opt-del" data-id="${o.id}" aria-label="Изтрий ${e(o.value)}">${e(o.value)} ✕</button>`).join('')}</div>
+    <div class="inline" style="margin-top:10px"><input class="field" id="new-${kind}" placeholder="Добави" autocomplete="off"><button class="btn" data-act="opt-add" data-v="${kind}">Добави</button></div></section>`;
+  const tees = D.types.filter(t => t.is_tshirt).map(t => `<section class="block"><h2><span>${e(t.name)}</span></h2>
+    <label class="lbl" for="sz-${t.id}">Размери (със запетая)</label><input class="field" id="sz-${t.id}" data-type="${t.id}" data-list="sizes" value="${e(t.sizes.join(', '))}" autocomplete="off">
+    <label class="lbl" for="cl-${t.id}">Цветове (със запетая)</label><input class="field" id="cl-${t.id}" data-type="${t.id}" data-list="colors" value="${e(t.colors.join(', '))}" autocomplete="off"></section>`).join('');
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Настройки</h1><span>${e(nameOf(me.id))}</span></div>
+    <p class="small muted" style="margin-bottom:10px">Екип: ${e(D.members.map(m => m.name).join(', '))}</p>
+    ${listBlock('brand', 'Марки')}${listBlock('channel', 'Канали')}${listBlock('account', 'TikTok акаунти на Meivi')}
+    <h2 style="margin:18px 0 10px;font-size:16px">Тениски</h2>${tees}
+    <button class="btn ghost wide" data-act="logout" style="margin-top:8px">Изход</button>
+    <p class="small muted" style="margin-top:14px;text-align:center">Версия ${e(VERSION)}</p>`;
+}
+
+/* ---------- statistics (owner only for now) ---------- */
+const MONTHS = ['яну', 'фев', 'мар', 'апр', 'май', 'юни', 'юли', 'авг', 'сеп', 'окт', 'ное', 'дек'];
+function periodRange(k) {
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  if (k === 'today') return [new Date(y, m, now.getDate()), null];
+  if (k === '7') return [new Date(y, m, now.getDate() - 6), null];
+  if (k === 'month') return [new Date(y, m, 1), null];
+  if (k === 'prev') return [new Date(y, m - 1, 1), new Date(y, m, 1)];
+  if (k === '90') return [new Date(Date.now() - 90 * 864e5), null];
+  return [null, null];
+}
+function barList(title, rows, fmt) {
+  if (!rows.length) return '';
+  const max = Math.max(...rows.map(r => r.v), 1);
+  return `<section class="block"><h2><span>${e(title)}</span></h2><div class="bars">${rows.map(r => `
+    <div class="bar-row"><span class="bar-l">${e(r.k)}</span><span class="bar-v">${e(fmt(r))}</span>
+      <span class="bar-t"><i style="width:${Math.max(2, Math.round(r.v / max * 100))}%"></i></span></div>`).join('')}</div></section>`;
+}
+function groupBy(list, keyFn) {
+  const m = new Map();
+  list.forEach(o => { const k = keyFn(o); if (!k) return; const g = m.get(k) || { k, n: 0, sum: 0 }; g.n++; g.sum += Number(o.price) || 0; m.set(k, g); });
+  return [...m.values()].map(g => Object.assign(g, { v: g.n })).sort((a, b) => b.n - a.n || b.sum - a.sum);
+}
+function viewStats() {
+  const [from, to] = periodRange(UI.statsPeriod);
+  const inRange = h => { const d = new Date(h.created_at); return (!from || d >= from) && (!to || d < to); };
+  const list = D.history.filter(inRange);
+  const priced = list.filter(h => h.price != null);
+  const total = priced.reduce((a, h) => a + Number(h.price), 0);
+  const firstSeen = new Map();
+  D.history.forEach(h => { const k = phoneKey(h.phone); if (k && !firstSeen.has(k)) firstSeen.set(k, h.id); });
+  const repeat = list.filter(h => { const k = phoneKey(h.phone); return k && firstSeen.get(k) !== h.id; }).length;
+  const shipped = list.filter(h => h.waybill_at).length;
+  const cnt = g => `${g.n} · ${money(g.sum) || '0,00 €'}`;
+  const prodMap = new Map();
+  list.forEach(h => (h.items || []).forEach(it => prodMap.set(it.name, (prodMap.get(it.name) || 0) + (it.qty || 1))));
+  const prods = [...prodMap.entries()].map(([k, v]) => ({ k, v })).sort((a, b) => b.v - a.v);
+  const now = new Date();
+  const months = [];
+  for (let i = 5; i >= 0; i--) {
+    const a = new Date(now.getFullYear(), now.getMonth() - i, 1), b = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+    const ms = D.history.filter(h => { const d = new Date(h.created_at); return d >= a && d < b; });
+    months.push({ k: `${MONTHS[a.getMonth()]} ${String(a.getFullYear()).slice(2)}`, n: ms.length, sum: ms.reduce((x, h) => x + (Number(h.price) || 0), 0) });
+  }
+  const seg = (v, l) => `<button class="chip" data-act="stats-period" data-v="${v}" aria-pressed="${UI.statsPeriod === v}">${l}</button>`;
+  const tile = (label, value, sub) => `<div class="tile"><span>${e(label)}</span><b>${e(value)}</b>${sub ? `<small>${e(sub)}</small>` : ''}</div>`;
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Статистика</h1><span>${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}</span></div>
+    <div class="chips" style="margin-bottom:14px">${seg('today', 'Днес')}${seg('7', '7 дни')}${seg('month', 'Този месец')}${seg('prev', 'Миналия месец')}${seg('90', '90 дни')}${seg('all', 'Всичко')}</div>
+    <div class="tiles">
+      ${tile('Поръчки', String(list.length), `${shipped} изпратени`)}
+      ${tile('Оборот', money(total) || '0,00 €', priced.length < list.length ? `${list.length - priced.length} без цена` : 'наложен платеж')}
+      ${tile('Средна поръчка', priced.length ? money(total / priced.length) : '—', '')}
+      ${tile('Повторни клиенти', String(repeat), list.length ? `${Math.round(repeat / list.length * 100)}% от поръчките` : '')}
+    </div>
+    ${list.length ? '' : '<p class="empty">Няма поръчки за този период.</p>'}
+    ${barList('По магазин', groupBy(list, h => h.brand), cnt)}
+    ${barList('По канал', groupBy(list, h => h.channel), cnt)}
+    ${barList('TikTok акаунти на Meivi', groupBy(list.filter(h => h.brand === 'Meivi' && h.channel === 'TikTok'), h => h.account || 'Без акаунт'), cnt)}
+    ${barList('Продукти (бройки)', prods, r => `${r.v} бр.`)}
+    <section class="block"><h2><span>По месеци</span></h2><div class="tbl-wrap"><table>
+      <thead><tr><th>Месец</th><th>Поръчки</th><th>Оборот</th></tr></thead>
+      <tbody>${months.map(r => `<tr><td>${e(r.k)}</td><td class="${r.n ? 'v' : 'z'}">${r.n || '·'}</td><td class="${r.sum ? 'v' : 'z'}">${r.sum ? e(money(r.sum)) : '·'}</td></tr>`).join('')}</tbody>
+    </table></div></section>
+    <p class="small muted" style="margin-top:6px">Оборотът е сборът от цените за наложен платеж, въведени в поръчките.</p>`;
+}
+
+/* ---------- work per person (owner only) ---------- */
+const WORK_PERIODS = [['today', 'Днес'], ['7', '7 дни'], ['month', 'Този месец'], ['prev', 'Миналия месец'], ['90', '90 дни'], ['all', 'Всичко']];
+async function loadWork() {
+  const key = UI.workPeriod, [from, to] = periodRange(key);
+  UI.work = { key, loading: true, rows: UI.work && UI.work.key === key ? UI.work.rows : null, err: '' };
+  render();
+  try {
+    const rows = await api.workStats(from ? from.toISOString() : null, to ? to.toISOString() : null);
+    if (UI.workPeriod !== key) return;
+    UI.work = { key, loading: false, rows, err: '' };
+  } catch (x) { UI.work = { key, loading: false, rows: null, err: 'Не успях да заредя данните. Провери интернета и опитай пак.' }; }
+  if (UI.tab === 'work') render();
+}
+function workRowsOf(uid) {
+  const W = UI.work, stageOrder = D.stageDefs.map(x => x.name);
+  const kindOrder = ['stage', 'pack', 'waybill', 'confirm', 'created', 'task'];
+  const rank = r => kindOrder.indexOf(r.kind) * 1000 + (r.kind === 'stage' ? (stageOrder.indexOf(r.label) + 1 || 999) : 0);
+  return (W && W.rows ? W.rows : []).filter(r => r.user_id === uid).sort((a, b) => rank(a) - rank(b) || a.label.localeCompare(b.label));
+}
+const workVal = r => r.kind === 'stage' ? Number(r.qty) : Number(r.n);
+const workTxt = r => `${workVal(r)}${r.kind === 'stage' ? ' бр.' : ''}`;
+const workSeg = () => WORK_PERIODS.map(([v, l]) => `<button class="chip" data-act="work-period" data-v="${v}" aria-pressed="${UI.workPeriod === v}">${l}</button>`).join('');
+function viewWork() {
+  const W = UI.work;
+  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Работа по хора</h1></div>
+    <div class="chips" style="margin-bottom:14px">${workSeg()}</div>`;
+  if (!W || (W.loading && !W.rows)) return head + '<p class="empty">Зареждам…</p>';
+  if (W.err) return head + `<p class="empty">${e(W.err)}</p>`;
+  const people = D.members.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const rows = people.map(m => {
+    const mine = workRowsOf(m.user_id);
+    const pieces = mine.filter(r => r.kind === 'stage').reduce((x, r) => x + workVal(r), 0);
+    const orders = mine.filter(r => r.kind === 'pack' || r.kind === 'waybill').reduce((x, r) => x + workVal(r), 0);
+    const sum = mine.length ? [pieces ? `${pieces} бр. по етапи` : '', orders ? `${orders} опаковани/изпратени` : ''].filter(Boolean).join(' · ') || `${mine.reduce((x, r) => x + workVal(r), 0)} отметки` : 'няма отбелязана работа';
+    return `<button class="person" data-act="work-person" data-id="${m.user_id}"><span><b>${e(m.name)}</b></span><span class="person-n">${e(sum)}</span></button>`;
+  }).join('');
+  return head + `${W.loading ? '<p class="fnow">Обновявам…</p>' : ''}<section class="group"><h2>Екип</h2>${rows}</section>`;
+}
+function workPopHtml() {
+  const uid = UI.workPerson, mine = workRowsOf(uid), W = UI.work;
+  const maxBy = {};
+  (W && W.rows ? W.rows : []).forEach(r => { const k = r.kind + '|' + r.label; maxBy[k] = Math.max(maxBy[k] || 0, workVal(r)); });
+  const body = W && W.loading && !W.rows ? '<p class="empty">Зареждам…</p>'
+    : mine.length ? `<div class="bars">${mine.map(r => {
+        const v = workVal(r), max = maxBy[r.kind + '|' + r.label] || 1;
+        return `<div class="bar-row"><span class="bar-l">${e(r.label)}</span><span class="bar-v">${e(workTxt(r))}</span>
+          <span class="bar-t"><i style="width:${Math.max(2, Math.round(v / max * 100))}%"></i></span></div>`;
+      }).join('')}</div>` : '<p class="small muted" style="margin-top:8px">Няма отбелязана работа за този период.</p>';
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="work" role="dialog" aria-modal="true" aria-label="${e(nameOf(uid))}">
+    <div class="pop-head"><b class="who">${e(nameOf(uid))}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body"><div class="chips" style="margin-top:12px">${workSeg()}</div>${body}</div>
+  </div></div>`;
+}
+
+/* ---------- leave (owner only for now) ---------- */
+let LV = null;
+const KIND = { paid: 'Платен', unpaid: 'Неплатен', sick: 'Болничен', other: 'Друго' };
+const pad2 = n => String(n).padStart(2, '0');
+const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const parseDay = s => { const [y, m, d] = String(s).split('-').map(Number); return new Date(y, m - 1, d); };
+const shortDay = s => parseDay(s).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' });
+const range = l => l.start_date === l.end_date ? shortDay(l.start_date) : `${shortDay(l.start_date)} – ${shortDay(l.end_date)}`;
+const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+const workweek = () => Number(((LV && LV.settings) || []).find(x => x.key === 'workweek')?.value || 5);
+function holidaySet() { return new Set(((LV && LV.holidays) || []).map(h => h.day)); }
+function isWorkDay(d, hol) { const w = d.getDay(); return (workweek() === 6 ? w !== 0 : w >= 1 && w <= 5) && !hol.has(isoDay(d)); }
+function workDays(start, end, year) {
+  if (!start || !end || end < start) return 0;
+  const hol = holidaySet(); let n = 0;
+  for (let d = parseDay(start), last = parseDay(end); d <= last; d.setDate(d.getDate() + 1)) {
+    if (year && d.getFullYear() !== year) continue;
+    if (isWorkDay(d, hol)) n++;
+  }
+  return n;
+}
+function yearSummary(uid, year) {
+  const mine = ((LV && LV.leaves) || []).filter(l => l.user_id === uid && l.status === 'approved' && l.start_date <= `${year}-12-31` && l.end_date >= `${year}-01-01`);
+  const used = { paid: 0, unpaid: 0, sick: 0, other: 0 };
+  mine.forEach(l => { used[l.kind] += workDays(l.start_date, l.end_date, year); });
+  const a = ((LV && LV.allowances) || []).find(x => x.user_id === uid && x.year === year);
+  const total = a ? Number(a.days) + Number(a.carried) : null;
+  return { mine: mine.sort((x, y) => (x.start_date < y.start_date ? -1 : 1)), used, a, total, left: total == null ? null : total - used.paid };
+}
+async function loadLeave() {
+  try { LV = await api.loadLeave(); } catch (x) { LV = { err: 'Не успях да заредя отпуските. Провери интернета и опитай пак.' }; }
+  if (['leave'].includes(UI.tab)) render();
+}
+async function leaveAct(fn) {
+  try { await fn(); } catch (x) { toast('Не успях да запазя. Провери интернета.'); }
+  await loadLeave();
+}
+
+function viewLeave() {
+  const head = `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Отпуски</h1><button class="fbtn" data-act="lv-new">+ Отсъствие</button></div>`;
+  if (!LV) return head + '<p class="empty">Зареждам…</p>';
+  if (LV.err) return head + `<p class="empty">${e(LV.err)}</p>`;
+  const Y = UI.leaveYear, today = isoDay(new Date());
+  const years = [new Date().getFullYear(), new Date().getFullYear() + 1];
+  const yseg = years.map(y => `<button class="chip" data-act="lv-year" data-v="${y}" aria-pressed="${Y === y}">${y}</button>`).join('');
+  // now and upcoming
+  const soon = LV.leaves.filter(l => l.status === 'approved' && l.end_date >= today).sort((a, b) => (a.start_date < b.start_date ? -1 : 1)).slice(0, 12);
+  const soonRows = soon.map(l => {
+    const now = l.start_date <= today;
+    return `<button class="person" data-act="lv-edit" data-id="${l.id}"><span><b>${e(nameOf(l.user_id))}</b> <span class="muted">· ${e(KIND[l.kind])}</span></span>
+      <span class="person-n">${now ? '<span class="late">сега · </span>' : ''}${e(range(l))} · ${workDays(l.start_date, l.end_date)} р.д.</span></button>`;
+  }).join('');
+  // team with balances
+  const people = D.members.slice().sort((a, b) => a.name.localeCompare(b.name));
+  const teamRows = people.map(m => {
+    const y = yearSummary(m.user_id, Y);
+    const off = LV.leaves.find(l => l.user_id === m.user_id && l.status === 'approved' && l.start_date <= today && l.end_date >= today);
+    const bal = y.total == null ? '<span class="muted">няма зададени дни</span>' : `остават <b>${fmtDays(y.left)}</b> от ${fmtDays(y.total)}`;
+    return `<button class="person" data-act="lv-person" data-id="${m.user_id}"><span><b>${e(m.name)}</b>${off ? ` <span class="late">· в отсъствие до ${e(shortDay(off.end_date))}</span>` : ''}</span><span class="person-n">${bal}</span></button>`;
+  }).join('');
+  return head + `<div class="chips" style="margin-bottom:14px">${yseg}</div>
+    <section class="group"><h2>Сега и предстоящи</h2>${soonRows || '<p class="small muted" style="padding:12px 14px">Няма записани отсъствия.</p>'}</section>
+    <section class="group"><h2>Екип · ${Y}</h2>${teamRows}</section>
+    ${calendarHtml()}
+    ${leaveSettingsHtml()}`;
+}
+const fmtDays = n => (Math.round(n * 10) / 10).toString().replace('.', ',');
+
+function calendarHtml() {
+  const now = new Date();
+  const [y, m] = (UI.leaveMonth || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`).split('-').map(Number);
+  const first = new Date(y, m - 1, 1), daysIn = new Date(y, m, 0).getDate(), lead = (first.getDay() + 6) % 7;
+  const hol = holidaySet(), today = isoDay(now);
+  const holName = Object.fromEntries(LV.holidays.map(h => [h.day, h.name]));
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<div class="cal-c cal-x"></div>');
+  for (let d = 1; d <= daysIn; d++) {
+    const day = new Date(y, m - 1, d), key = isoDay(day), work = isWorkDay(day, hol);
+    const who = LV.leaves.filter(l => l.status === 'approved' && l.start_date <= key && l.end_date >= key);
+    cells.push(`<div class="cal-c ${work ? '' : 'cal-off'} ${key === today ? 'cal-today' : ''}" ${holName[key] ? `title="${e(holName[key])}"` : ''}>
+      <span class="cal-d">${d}</span>${who.map(l => `<span class="cal-p ${l.kind}" title="${e(nameOf(l.user_id))} · ${e(KIND[l.kind])}">${e(initials(nameOf(l.user_id)))}</span>`).join('')}</div>`);
+  }
+  const label = first.toLocaleDateString('bg-BG', { month: 'long', year: 'numeric' });
+  return `<section class="block"><h2><button class="link" data-act="lv-month" data-v="-1" aria-label="Предишен месец">‹</button><span>${e(label)}</span><button class="link" data-act="lv-month" data-v="1" aria-label="Следващ месец">›</button></h2>
+    <div class="cal">${['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'].map(x => `<div class="cal-h">${x}</div>`).join('')}${cells.join('')}</div>
+    <p class="cal-key"><span class="cal-p paid">АБ</span> платен <span class="cal-p unpaid">АБ</span> неплатен <span class="cal-p sick">АБ</span> болничен <span class="cal-p other">АБ</span> друго · сиво = почивен ден или празник</p></section>`;
+}
+
+function leaveSettingsHtml() {
+  const Y = UI.leaveYear, ww = workweek();
+  const hols = LV.holidays.filter(h => h.day.startsWith(String(Y)));
+  return `<section class="block"><h2><span>Настройки за отпуските</span></h2>
+    <span class="lbl">Работна седмица</span>
+    <div class="chips"><button class="chip" data-act="lv-ww" data-v="5" aria-pressed="${ww === 5}">Пон–Пет</button><button class="chip" data-act="lv-ww" data-v="6" aria-pressed="${ww === 6}">Пон–Съб</button></div>
+    <button class="group-toggle" data-act="lv-hols" style="padding:14px 0 4px">Неработни празници ${Y} (${hols.length}) <span>${UI.showHolidays ? 'Скрий' : 'Покажи'}</span></button>
+    ${UI.showHolidays ? `<div class="hols">${hols.map(h => `<div class="hol"><span><b>${e(shortDay(h.day))}</b> ${e(h.name)}</span><button class="link" data-act="lv-hol-del" data-v="${h.day}" aria-label="Махни">✕</button></div>`).join('') || '<p class="small muted">Няма въведени празници за тази година.</p>'}
+      <div class="inline" style="margin-top:10px"><input class="field" id="hol-day" type="date"><input class="field" id="hol-name" autocomplete="off"></div>
+      <button class="btn ghost" data-act="lv-hol-add" style="margin-top:8px">Добави празник</button></div>` : ''}
+  </section>`;
+}
+
+function leavePersonHtml() {
+  const uid = UI.leavePerson, Y = UI.leaveYear, y = yearSummary(uid, Y);
+  const tile = (label, value) => `<div class="tile"><span>${e(label)}</span><b>${e(value)}</b></div>`;
+  const rows = y.mine.map(l => `<button class="person" data-act="lv-edit" data-id="${l.id}"><span><b>${e(KIND[l.kind])}</b>${l.note ? ` <span class="muted">· ${e(l.note)}</span>` : ''}</span><span class="person-n">${e(range(l))} · ${workDays(l.start_date, l.end_date, Y)} р.д.</span></button>`).join('');
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="leave" role="dialog" aria-modal="true" aria-label="${e(nameOf(uid))}">
+    <div class="pop-head"><b class="who">${e(nameOf(uid))} · ${Y}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <div class="inline" style="margin-top:12px">
+        <label class="lv-field"><span class="lbl">Полагаеми дни</span><input class="field" id="al-days" inputmode="decimal" value="${y.a ? fmtDays(y.a.days) : ''}" data-uid="${uid}"></label>
+        <label class="lv-field"><span class="lbl">Прехвърлени</span><input class="field" id="al-carried" inputmode="decimal" value="${y.a ? fmtDays(y.a.carried) : ''}" data-uid="${uid}"></label>
+      </div>
+      <div class="tiles" style="margin-top:14px">
+        ${tile('Остават', y.left == null ? '—' : fmtDays(y.left))}
+        ${tile('Платен', fmtDays(y.used.paid) + (y.total == null ? '' : ' от ' + fmtDays(y.total)))}
+        ${tile('Неплатен', fmtDays(y.used.unpaid))}
+        ${tile('Болничен', fmtDays(y.used.sick))}
+        ${y.used.other ? tile('Друго', fmtDays(y.used.other)) : ''}
+      </div>
+      <section class="group" style="margin-top:4px"><h2>Отсъствия ${Y}</h2>${rows || '<p class="small muted" style="padding:12px 14px">Няма записани отсъствия.</p>'}</section>
+      <button class="btn wide" data-act="lv-new" data-id="${uid}">+ Отсъствие за ${e(nameOf(uid))}</button>
+    </div></div></div>`;
+}
+
+function leaveEditHtml() {
+  const E = UI.leaveEdit, d = E.draft;
+  const n = workDays(d.start, d.end);
+  const overlap = d.user_id && d.start && d.end && LV.leaves.some(l => l.id !== E.id && l.user_id === d.user_id && l.status === 'approved' && l.start_date <= d.end && l.end_date >= d.start);
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="leave-edit" role="dialog" aria-modal="true" aria-label="Отсъствие">
+    <div class="pop-head"><b class="who">${E.id ? 'Отсъствие' : 'Ново отсъствие'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <label class="lbl" for="lv-user">Кой</label>
+      <select class="field" id="lv-user"><option value="">Избери…</option>${D.members.map(m => `<option value="${m.user_id}" ${d.user_id === m.user_id ? 'selected' : ''}>${e(m.name)}</option>`).join('')}</select>
+      <span class="lbl">Вид</span>
+      <div class="chips">${Object.entries(KIND).map(([k, l]) => `<button class="chip" data-act="lv-kind" data-v="${k}" aria-pressed="${d.kind === k}">${l}</button>`).join('')}</div>
+      <div class="inline">
+        <label class="lv-field"><span class="lbl">От</span><input class="field" id="lv-start" type="date" value="${e(d.start)}"></label>
+        <label class="lv-field"><span class="lbl">До</span><input class="field" id="lv-end" type="date" value="${e(d.end)}"></label>
+      </div>
+      <p class="lv-count" id="lv-count">${d.start && d.end ? (d.end < d.start ? 'Крайната дата е преди началната.' : `${n} ${n === 1 ? 'работен ден' : 'работни дни'}`) : ''}</p>
+      <label class="lbl" for="lv-note">Бележка</label><input class="field" id="lv-note" value="${e(d.note)}" autocomplete="off">
+      ${overlap ? '<p class="warn">Този човек вече има отсъствие в част от тези дни.</p>' : ''}
+      <p class="err" role="alert">${e(E.err || '')}</p>
+      <div class="actions"><button class="btn" data-act="lv-save">Запази</button><button class="btn ghost" data-act="lv-cancel">Отказ</button></div>
+      ${E.id ? `<div class="actions"><button class="btn danger" data-act="lv-del">${UI.armed === 'leave:' + E.id ? 'Натисни пак, за да изтриеш' : 'Изтрий отсъствието'}</button></div>` : ''}
+    </div></div></div>`;
+}
+function startLeaveEdit(id, uid) {
+  const l = id && LV.leaves.find(x => x.id === id);
+  const t = isoDay(new Date());
+  UI.leaveEdit = { id: l ? l.id : null, err: '', draft: l
+    ? { user_id: l.user_id, kind: l.kind, start: l.start_date, end: l.end_date, note: l.note }
+    : { user_id: uid || UI.leavePerson || '', kind: 'paid', start: t, end: t, note: '' } };
+  renderPop();
+}
+async function saveLeave() {
+  const E = UI.leaveEdit, d = E.draft;
+  if (!d.user_id) { E.err = 'Избери човек.'; return renderPop(); }
+  if (!d.start || !d.end) { E.err = 'Избери от коя до коя дата.'; return renderPop(); }
+  if (d.end < d.start) { E.err = 'Крайната дата е преди началната.'; return renderPop(); }
+  const row = { user_id: d.user_id, kind: d.kind, start_date: d.start, end_date: d.end, note: d.note.trim() };
+  const id = E.id;
+  UI.leaveEdit = null;
+  await leaveAct(() => id ? api.update('leaves', id, row) : api.insert('leaves', row));
+  toast(id ? 'Отсъствието е променено' : 'Отсъствието е записано');
+}
+async function saveAllowance(uid, field, raw) {
+  const v = parsePrice(raw);
+  const Y = UI.leaveYear, cur = yearSummary(uid, Y).a || { user_id: uid, year: Y, days: 20, carried: 0 };
+  const row = { user_id: uid, year: Y, days: Number(cur.days), carried: Number(cur.carried) };
+  row[field] = v == null ? 0 : v;
+  await leaveAct(() => api.upsert('leave_allowances', row));
+}
+
+/* ---------- profile & personal tasks ---------- */
+const openTask = t => !t.done_at;
+const taskSort = (a, b) => (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1);
+const myOpenCount = () => D.tasks.filter(t => t.assignee === (me && me.id) && openTask(t)).length;
+
+function taskRow(t) {
+  const late = t.due && !t.done_at && t.due < today();
+  const o = t.order_id && findOrder(t.order_id);
+  const meta = [
+    t.urgent && !t.done_at ? '<span class="badge urgent">Спешна</span>' : '',
+    t.due ? `<span class="${late ? 'late' : ''}">${late ? 'Закъснява · ' : 'до '}${e(day(t.due))}</span>` : '',
+    o ? `<span>Поръчка #${o.num}${o.customer ? ' · ' + e(o.customer) : ''}</span>` : '',
+    t.done_at ? `<span>✓ ${e(nameOf(t.done_by) || '')} · ${e(day(t.done_at))}</span>` : ''
+  ].filter(Boolean).join('');
+  return `<div class="task ${t.done_at ? 'done' : ''}">
+    <button class="tick ${t.done_at ? 'on' : ''}" data-act="task-done" data-id="${t.id}" aria-pressed="${!!t.done_at}" aria-label="${t.done_at ? 'Върни като неизпълнена' : 'Отметни като изпълнена'}">${t.done_at ? '✓' : ''}</button>
+    <button class="task-main" data-act="task-open" data-id="${t.id}"><span class="task-title">${e(t.title)}</span>${meta ? `<span class="task-meta">${meta}</span>` : ''}</button>
+  </div>`;
+}
+function taskGroup(title, list) {
+  if (!list.length) return '';
+  return `<section class="group"><h2>${e(title)}</h2>${list.slice().sort(taskSort).map(taskRow).join('')}</section>`;
+}
+function doneGroup(list) {
+  if (!list.length) return '';
+  const rows = UI.showDone ? list.slice().sort((a, b) => (a.done_at < b.done_at ? 1 : -1)).map(taskRow).join('') : '';
+  return `<section class="group"><button class="group-toggle" data-act="show-done">Изпълнени (${list.length}) <span>${UI.showDone ? 'Скрий' : 'Покажи'}</span></button>${rows}</section>`;
+}
+function tasksOf(uid) {
+  const mine = D.tasks.filter(t => t.assignee === uid);
+  return { open: mine.filter(openTask), done: mine.filter(t => !openTask(t)) };
+}
+
+function viewProfile() {
+  const admin = isAdmin();
+  const missN = missingList().length;
+  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="missing" style="margin-top:8px">Липсващи размери${missN ? ` (${missN})` : ''}</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  if (admin && !UI.person) {
+    const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
+    const rows = people.map(m => {
+      const t = tasksOf(m.user_id);
+      const late = t.open.filter(x => x.due && x.due < today()).length;
+      return `<button class="person" data-act="person" data-id="${m.user_id}">
+        <span><b>${e(m.name)}</b>${m.user_id === me.id ? ' <span class="muted">(ти)</span>' : ''}</span>
+        <span class="person-n">${t.open.length ? `${t.open.length} ${t.open.length === 1 ? 'отворена' : 'отворени'}` : 'няма задачи'}${late ? ` · <span class="late">${late} ${late === 1 ? 'закъсняла' : 'закъснели'}</span>` : ''}</span>
+      </button>`;
+    }).join('');
+    return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
+      <section class="group"><h2>Екип</h2>${rows}</section>
+      <div class="actions" style="margin-top:6px"><button class="btn" data-act="tab" data-v="stats" style="flex:1">Статистика</button><button class="btn" data-act="tab" data-v="work" style="flex:1">Работа по хора</button></div>
+      <button class="btn wide" data-act="tab" data-v="leave" style="margin-top:8px">Отпуски</button>
+      ${settingsBtn}`;
+  }
+  const uid = admin ? UI.person : me.id;
+  const t = tasksOf(uid);
+  let groups;
+  if (admin) {
+    groups = taskGroup('Отворени задачи', t.open) || '<p class="empty">Няма отворени задачи.</p>';
+  } else {
+    const boss = D.members.find(m => m.is_admin);
+    groups = (taskGroup(`Възложени от ${boss ? boss.name : 'шефа'}`, t.open.filter(x => x.created_by !== me.id)) +
+      taskGroup('Мои', t.open.filter(x => x.created_by === me.id))) || '<p class="empty">Няма отворени задачи.</p>';
+  }
+  return `${admin ? '<button class="link back" data-act="person" data-id="">← Екип</button>' : ''}
+    <div class="top"><h1>${e(admin ? nameOf(uid) : 'Моите задачи')}</h1><button class="fbtn" data-act="task-new">+ Задача</button></div>
+    ${groups}${doneGroup(t.done)}
+    ${admin ? '' : settingsBtn}`;
+}
+
+function taskPopHtml() {
+  const T = UI.task, t = T.id ? D.tasks.find(x => x.id === T.id) : null, d = T.draft, admin = isAdmin();
+  const editable = !t || admin || t.created_by === me.id;
+  const canDelete = t && (admin || (t.created_by === me.id && t.assignee === me.id));
+  const o = d.order_id && findOrder(d.order_id);
+  let body;
+  if (editable) {
+    const orderOpts = activeOrders().slice().sort((a, b) => b.num - a.num);
+    if (o && !orderOpts.includes(o)) orderOpts.unshift(o);
+    body = `<label class="lbl" for="t-title">Задача</label><input class="field" id="t-title" value="${e(d.title)}" autocomplete="off">
+      <label class="lbl" for="t-note">Подробности</label><textarea class="field" id="t-note" rows="3">${e(d.note)}</textarea>
+      ${admin ? `<label class="lbl" for="t-assignee">За кого</label><select class="field" id="t-assignee">${D.members.map(m => `<option value="${m.user_id}" ${d.assignee === m.user_id ? 'selected' : ''}>${e(m.name)}${m.user_id === me.id ? ' (ти)' : ''}</option>`).join('')}</select>` : ''}
+      <label class="lbl" for="t-due">Срок</label><input class="field" id="t-due" type="date" value="${e(d.due || '')}">
+      <label class="lbl" for="t-order">Поръчка</label><select class="field" id="t-order"><option value="">Без поръчка</option>${orderOpts.map(x => `<option value="${x.id}" ${d.order_id === x.id ? 'selected' : ''}>#${x.num}${x.customer ? ' · ' + e(x.customer) : ''}</option>`).join('')}</select>
+      <label class="check"><input type="checkbox" id="t-urgent" ${d.urgent ? 'checked' : ''}>Спешна</label>
+      <p class="err" role="alert">${e(T.err || '')}</p>
+      <div class="actions"><button class="btn" data-act="task-save">${t ? 'Запази' : 'Добави задачата'}</button>
+        ${t ? `<button class="btn ghost" data-act="task-done" data-id="${t.id}">${t.done_at ? 'Върни като неизпълнена' : 'Изпълнена'}</button>` : ''}</div>
+      ${canDelete ? `<div class="actions"><button class="btn danger" data-act="task-del" data-id="${t.id}">${UI.armed === 'task:' + t.id ? 'Натисни пак, за да изтриеш' : 'Изтрий задачата'}</button></div>` : ''}`;
+  } else {
+    body = `<h3 class="task-h">${e(t.title)}</h3>
+      ${t.note ? `<p class="task-note">${e(t.note)}</p>` : ''}
+      <p class="task-meta" style="margin-top:10px">${t.urgent ? '<span class="badge urgent">Спешна</span>' : ''}${t.due ? `<span>Срок ${e(day(t.due))}</span>` : ''}</p>
+      ${o ? `<button class="btn ghost" data-act="open" data-id="${o.id}" style="margin-top:12px">Поръчка #${o.num}${o.customer ? ' · ' + e(o.customer) : ''}</button>` : ''}
+      <div class="actions"><button class="btn" data-act="task-done" data-id="${t.id}">${t.done_at ? 'Върни като неизпълнена' : 'Изпълнена'}</button></div>`;
+  }
+  const foot = t ? `<p class="small muted" style="margin-top:12px">Възложена от ${e(nameOf(t.created_by) || '—')} на ${e(day(t.created_at))}${t.done_at ? ` · изпълнена от ${e(nameOf(t.done_by))} на ${e(day(t.done_at))}` : ''}</p>` : '';
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="task" role="dialog" aria-modal="true" aria-label="${t ? 'Задача' : 'Нова задача'}">
+    <div class="pop-head"><b class="who">${t ? 'Задача' : 'Нова задача'}${!t && admin ? '' : ''}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">${body}${foot}</div></div></div>`;
+}
+function startTask(id, preset) {
+  const t = id && D.tasks.find(x => x.id === id);
+  UI.task = { id: t ? t.id : null, err: '', draft: t
+    ? { title: t.title, note: t.note, due: t.due || '', urgent: t.urgent, assignee: t.assignee, order_id: t.order_id || '' }
+    : Object.assign({ title: '', note: '', due: '', urgent: false, assignee: me.id, order_id: '' }, preset || {}) };
+  renderPop();
+  if (!t) setTimeout(() => { const f = $('#t-title'); if (f) f.focus(); }, 50);
+}
+async function saveTask() {
+  const T = UI.task, d = T.draft;
+  if (!d.title.trim()) { T.err = 'Напиши какво трябва да се направи.'; return renderPop(); }
+  const row = { title: d.title.trim(), note: d.note.trim(), due: d.due || null, urgent: !!d.urgent, order_id: d.order_id || null };
+  if (isAdmin()) row.assignee = d.assignee || me.id;
+  try {
+    if (T.id) await api.update('tasks', T.id, row);
+    else await api.insert('tasks', Object.assign({ assignee: me.id }, row));
+    UI.task = null;
+    await refresh(true);
+  } catch (x) { T.err = 'Не успях да запазя задачата. Провери интернета и опитай пак.'; renderPop(); }
+}
+
+function render() {
+  const app = $('#app');
+  if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
+  if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, missing: viewMissing, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const mine = myOpenCount();
+  app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
+    <main class="wrap">${view}</main>
+    ${['orders', 'summary', 'done'].includes(UI.tab) ? '<button class="fab" data-act="new">+ Нова поръчка</button>' : ''}`;
+  renderPop();
+}
+
+/* ---------- new order form ---------- */
+const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, custom: false, note: '', stages: [], extra: '' });
+function phoneHint(phone) {
+  const k = phoneKey(phone);
+  const list = k ? D.history.filter(h => phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : [];
+  if (!list.length) return '';
+  const last = list[0];
+  return `★ Поръчвал е преди: ${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}, последна #${last.num} от ${e(day(last.created_at))}${last.customer ? ' (' + e(last.customer) + ')' : ''}`;
+}
+function openForm() {
+  F = { customer: '', phone: '', recipient: '', address: '', price: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
+  renderForm();
+}
+const typeOf = id => D.types.find(t => t.id === id);
+function draftStages(it) {
+  if (it.typeId === 'custom') return it.stages.map(s => ({ key: s.key, name: s.name, kind: s.kind }));
+  const def = k => D.stageDefs.find(s => s.key === k);
+  return D.typeStages.filter(ts => ts.product_type_id === it.typeId && (!ts.optional || it.custom))
+    .sort((a, b) => a.sort - b.sort).map(ts => ({ key: ts.stage_key, name: def(ts.stage_key).name, kind: def(ts.stage_key).kind }));
+}
+function editorHtml() {
+  const it = F.edit, t = typeOf(it.typeId);
+  const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
+  let body = '';
+  if (t && t.is_tshirt) {
+    body = `<span class="lbl">Размер</span>${pick('f-size', t.sizes, it.size)}
+      <span class="lbl">Цвят</span>${pick('f-color', t.colors, it.color)}
+      <label class="check"><input type="checkbox" id="f-custom" ${it.custom ? 'checked' : ''}>Дизайн по желание на клиента</label>`;
+  } else if (it.typeId === 'custom') {
+    body = `<label class="lbl" for="f-name">Име на продукта</label><input class="field" id="f-name" value="${e(it.name)}" autocomplete="off">
+      <span class="lbl">Етапи</span>
+      <div class="chips">${D.stageDefs.map(s => `<button type="button" class="chip" data-act="f-stage" data-v="${s.key}" aria-pressed="${it.stages.some(x => x.key === s.key)}">${e(s.name)}</button>`).join('')}
+      ${it.stages.filter(s => s.key === 'custom').map(s => `<button type="button" class="chip" data-act="f-stage-x" data-v="${e(s.name)}" aria-pressed="true">${e(s.name)} ✕</button>`).join('')}</div>
+      <div class="inline" style="margin-top:10px"><input class="field" id="f-extra" placeholder="Друг етап" value="${e(it.extra)}" autocomplete="off"><button type="button" class="btn ghost" data-act="f-stage-add">Добави етап</button></div>`;
+  }
+  return `<div class="editor">
+    <label class="lbl" for="f-type">Продукт</label>
+    <select class="field" id="f-type"><option value="">Избери…</option>
+      ${D.types.map(x => `<option value="${x.id}" ${it.typeId === x.id ? 'selected' : ''}>${e(x.name)}</option>`).join('')}
+      <option value="custom" ${it.typeId === 'custom' ? 'selected' : ''}>Друго (нова задача)</option></select>
+    ${body}
+    ${it.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div>
+      <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" autocomplete="off">
+      <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>` : ''}
+  </div>`;
+}
+function renderForm() {
+  const sheet = $('#sheet');
+  lockPage();
+  if (!F) { sheet.innerHTML = ''; return; }
+  // keep the scroll position: redrawing the form must not jump back to the top
+  const prev = sheet.querySelector('.sheet');
+  const keepY = prev ? prev.scrollTop : 0;
+  const pick = (act, kind, cur) => `<div class="chips">${opts(kind).map(o => `<button type="button" class="chip" data-act="${act}" data-v="${e(o.value)}" aria-pressed="${cur === o.value}">${e(o.value)}</button>`).join('')}</div>`;
+  const hasTee = F.items.concat(F.edit).some(i => (typeOf(i.typeId) || {}).is_tshirt);
+  const confirm = F.confirm == null ? hasTee : F.confirm;
+  sheet.innerHTML = `<div class="sheet"><div class="sheet-in">
+    <div class="sheet-top"><h2>Нова поръчка</h2><button class="link" data-act="f-close">Отказ</button></div>
+    <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
+    <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
+    <p class="small phone-hint" id="f-phone-hint">${phoneHint(F.phone)}</p>
+    <label class="lbl" for="f-recipient">Име за доставка</label><input class="field" id="f-recipient" value="${e(F.recipient)}" autocomplete="off">
+    <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
+    <label class="lbl" for="f-price">Цена (наложен платеж), €</label><input class="field" id="f-price" inputmode="decimal" value="${e(F.price)}" autocomplete="off">
+    <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
+    <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
+    ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
+    <span class="lbl">Продукти</span>
+    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ name: it.name, qty: it.qty, size: it.size, color: it.color }))}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
+    ${editorHtml()}
+    <label class="lbl" for="f-due">Срок (по желание)</label><input class="field" id="f-due" type="date" value="${e(F.due)}">
+    <label class="check"><input type="checkbox" id="f-urgent" ${F.urgent ? 'checked' : ''}>Спешна поръчка</label>
+    <label class="check"><input type="checkbox" id="f-confirm" ${confirm ? 'checked' : ''}>Звъним на клиента за потвърждение</label>
+    <label class="lbl" for="f-note">Бележка към поръчката</label><textarea class="field" id="f-note" rows="2">${e(F.note)}</textarea>
+    <p class="err" role="alert">${e(F.err)}</p>
+    <button class="btn wide" data-act="f-save" ${F.busy ? 'disabled' : ''}>Запази поръчката</button>
+  </div></div>`;
+  const box = sheet.querySelector('.sheet');
+  box.scrollTop = keepY;
+  const err = box.querySelector('.err');
+  if (F.err && err) err.scrollIntoView({ block: 'center' });
+}
+function addDraft() {
+  const it = F.edit, t = typeOf(it.typeId);
+  if (!it.typeId) return 'Избери продукт.';
+  if (t && t.is_tshirt && (!it.size || !it.color)) return 'Избери размер и цвят.';
+  if (it.typeId === 'custom') {
+    if (!it.name.trim()) return 'Напиши име на продукта.';
+    it.stages.sort((a, b) => a.sort - b.sort);
+  } else it.name = t.name;
+  F.items.push(it);
+  F.edit = blankItem();
+  return '';
+}
+async function saveOrder() {
+  if (F.edit.typeId) { const m = addDraft(); if (m) { F.err = m; return renderForm(); } }
+  if (!F.items.length) { F.err = 'Добави поне един продукт.'; return renderForm(); }
+  if (!F.brand || !F.channel) { F.err = 'Избери марка и канал.'; return renderForm(); }
+  const hasTee = F.items.some(i => (typeOf(i.typeId) || {}).is_tshirt);
+  F.busy = true; F.err = ''; renderForm();
+  try {
+    await api.createOrder({
+      customer: F.customer.trim(), phone: F.phone.trim(), recipient: F.recipient.trim(), address: F.address.trim(), price: parsePrice(F.price) == null ? '' : String(parsePrice(F.price)), brand: F.brand, channel: F.channel,
+      account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
+      note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
+      items: F.items.map(it => ({
+        product_type_id: it.typeId === 'custom' ? '' : it.typeId, name: it.name.trim(),
+        is_tshirt: !!(typeOf(it.typeId) || {}).is_tshirt, size: it.size, color: it.color, qty: it.qty,
+        custom_design: it.custom, note: it.note.trim(), stages: draftStages(it)
+      }))
+    });
+    F = null; renderForm(); UI.tab = 'orders'; UI.filter = 'all';
+    await refresh(true);
+  } catch (x) { F.busy = false; F.err = 'Не успях да запазя поръчката. Провери интернета и опитай пак.'; renderForm(); }
+}
+
+/* ---------- actions ---------- */
+/* ---------- keeping phones in sync without downloading everything ----------
+   Full load only when the app opens. After that: live updates per changed order,
+   plus a light catch-up (only rows changed since the last sync) on return to the
+   app, after a dropped connection and every few minutes as a safety net. */
+let lastSync = 0, pendingRedraw = false;
+const RECENT_MS = 30 * 864e5;
+const keepInList = o => !o.waybill_at || Date.now() - new Date(o.waybill_at).getTime() < RECENT_MS;
+const lightOf = o => ({ id: o.id, num: o.num, customer: o.customer, phone: o.phone, price: o.price, brand: o.brand, channel: o.channel,
+  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty })) });
+function upsert(list, row, key = 'id') { const i = list.findIndex(x => x[key] === row[key]); if (i >= 0) list[i] = row; else list.push(row); }
+function mergeOrder(o) {
+  if (keepInList(o)) upsert(D.orders, o); else D.orders = D.orders.filter(x => x.id !== o.id);
+  upsert(D.history, lightOf(o));
+  if (allOrders) upsert(allOrders, o);
+}
+function dropOrder(id) {
+  D.orders = D.orders.filter(x => x.id !== id);
+  D.history = D.history.filter(x => x.id !== id);
+  D.notes = D.notes.filter(n => n.order_id !== id);
+  if (allOrders) allOrders = allOrders.filter(x => x.id !== id);
+}
+function redraw(force) {
+  const el = document.activeElement;
+  if (!force && el && el.id === 'q') { updateResults(); return; }   // search results can refresh under the search box
+  if (!force && el && el.closest && el.closest('#app, #pop') && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) { pendingRedraw = true; return; }
+  pendingRedraw = false;
+  render();
+  if (UI.searching) updateResults();
+}
+document.addEventListener('focusout', () => setTimeout(() => { if (pendingRedraw) redraw(); }, 120));
+
+async function fullLoad() {
+  const t0 = Date.now();
+  try { D = await api.load(); } catch (x) { return false; }
+  lastSync = t0;
+  redraw(true);
+  return true;
+}
+let syncing = null;
+async function sync() {
+  if (!me) return;
+  if (syncing) return syncing;
+  syncing = (async () => {
+    const t0 = Date.now();
+    // two minutes of overlap so a slightly wrong phone clock cannot skip a change
+    const since = new Date((lastSync || t0) - 120000).toISOString();
+    try {
+      const r = await api.syncSince(since);
+      r.orders.forEach(mergeOrder);
+      r.tasks.forEach(t => upsert(D.tasks, t));
+      r.notes.forEach(n => upsert(D.notes, n));
+      lastSync = t0;
+    } catch (x) { /* offline: try again later */ }
+  })();
+  try { await syncing; } finally { syncing = null; }
+}
+async function refresh(force) { await sync(); redraw(force); }
+
+// live updates: collect changed orders for a moment, then fetch just those
+let orderQueue = new Set(), orderTimer = 0, configTimer = 0, liveDown = false;
+function onOrderChange(ev) {
+  if (ev.eventType === 'DELETE') { if (ev.old && ev.old.id) { dropOrder(ev.old.id); redraw(); } return; }
+  if (!ev.new || !ev.new.id) return;
+  orderQueue.add(ev.new.id);
+  clearTimeout(orderTimer);
+  orderTimer = setTimeout(async () => {
+    const ids = [...orderQueue]; orderQueue = new Set();
+    try { (await api.loadOrders(ids)).forEach(mergeOrder); } catch (x) { return; }
+    redraw();
+  }, 300);
+}
+function onTaskChange(ev) {
+  if (ev.eventType === 'DELETE') D.tasks = D.tasks.filter(t => t.id !== (ev.old && ev.old.id));
+  else if (ev.new && ev.new.id) upsert(D.tasks, ev.new);
+  redraw();
+}
+function onNoteChange(ev) {
+  if (ev.eventType === 'DELETE') D.notes = D.notes.filter(n => n.id !== (ev.old && ev.old.id));
+  else if (ev.new && ev.new.id) upsert(D.notes, ev.new);
+  redraw();
+}
+async function reloadConfig() {
+  try { Object.assign(D, await api.loadConfig()); } catch (x) { return; }
+  redraw();
+}
+function onConfigChange() { clearTimeout(configTimer); configTimer = setTimeout(reloadConfig, 400); }
+function onLiveStatus(status) {
+  if (status === 'SUBSCRIBED') { if (liveDown) { liveDown = false; refresh(); } }
+  else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') liveDown = true;
+}
+
+// after my own change: apply what I know right away, then pick up the rest
+async function act(fn, after) {
+  try { await fn(); } catch (x) { /* the catch-up below shows the real state */ }
+  if (after && after.dropOrder) dropOrder(after.dropOrder);
+  if (after && after.dropTask) D.tasks = D.tasks.filter(t => t.id !== after.dropTask);
+  if (after && after.config) await reloadConfig();
+  await refresh(true);
+}
+const findOrder = id => D.orders.find(o => o.id === id);
+let toastTimer = 0;
+function toast(text, undoAct, id) {
+  clearTimeout(toastTimer);
+  $('#toast').innerHTML = `<div class="toast" role="status"><span>${e(text)}</span>${undoAct ? `<button data-act="${undoAct}" data-id="${id}" data-undo="1">Отмени</button>` : ''}</div>`;
+  toastTimer = setTimeout(() => { $('#toast').innerHTML = ''; }, 6000);
+}
+function showNotice(icon, title, text) {
+  const old = document.getElementById('notice'); if (old) old.remove();
+  const d = document.createElement('div'); d.id = 'notice'; d.className = 'notice-ov';
+  d.innerHTML = `<div class="notice" role="alertdialog" aria-label="${e(title)}"><div class="ico">${icon}</div><h2>${e(title)}</h2><p>${e(text)}</p><button class="btn wide" data-act="notice-ok">Разбрах</button></div>`;
+  document.body.appendChild(d);
+  if (navigator.vibrate) try { navigator.vibrate(200); } catch (x) {}
+}
+const stamp = on => (on ? { at: null, by: null } : { at: new Date().toISOString(), by: me.id });
+
+function authMsg(x) {
+  const m = String((x && x.message) || x);
+  if (/Invalid login/i.test(m)) return 'Грешен имейл или парола.';
+  if (/Database error/i.test(m)) return 'Невалиден код за достъп.';
+  if (/not confirmed/i.test(m)) return 'Потвърди имейла от писмото, което получи, и влез отново.';
+  if (/already registered/i.test(m)) return 'Този имейл вече има профил. Влез с него.';
+  if (/password/i.test(m)) return 'Паролата трябва да е поне 6 знака.';
+  if (/email/i.test(m)) return 'Провери имейл адреса.';
+  return 'Нещо се обърка. Провери интернета и опитай пак.';
+}
+
+document.addEventListener('submit', async ev => {
+  if (ev.target.id !== 'auth-form') return;
+  ev.preventDefault();
+  // read every field BEFORE re-rendering, otherwise the values are lost
+  const v = id => ($(id) ? $(id).value.trim() : '');
+  const up = UI.authMode === 'up';
+  const f = { name: v('#a-name'), email: v('#a-email'), pass: $('#a-pass').value, code: v('#a-code') };
+  const put = () => { for (const [k, id] of [['name', '#a-name'], ['email', '#a-email'], ['pass', '#a-pass'], ['code', '#a-code']]) if ($(id)) $(id).value = f[k]; };
+  if (!f.email || !f.pass || (up && (!f.name || !f.code))) { UI.authErr = 'Попълни всички полета.'; render(); return put(); }
+  UI.busy = true; UI.authErr = ''; render(); put();
+  try {
+    me = up ? await api.signUp(f.email, f.pass, f.name, f.code) : await api.signIn(f.email, f.pass);
+    UI.busy = false;
+    await start();
+  } catch (x) { UI.busy = false; UI.authErr = authMsg(x); render(); put(); }
+});
+
+document.addEventListener('click', async ev => {
+  const b = ev.target.closest('[data-act]');
+  if (!b) return;
+  const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del') UI.armed = null;
+  const undo = !!b.dataset.undo;
+  if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
+  switch (a) {
+    case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
+      if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
+    case 'filter': UI.filter = v; return render();
+    case 'brand': UI.brand = v; return render();
+    case 'prod': UI.prod = v; UI.sub = 'all'; UI.prodOpen = false; return render();
+    case 'sub': UI.sub = v; UI.filter = 'all'; return render();
+    case 'sum-mode': UI.sumMode = v; return render();
+    case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'filters': UI.fopen = true; return renderPop();
+    case 'prod-open': UI.prodOpen = !UI.prodOpen; return renderPop();
+    case 'prod-sub': UI.prod = v; UI.sub = b.dataset.sub; UI.prodOpen = false; return render();
+    case 'only-urgent': UI.onlyUrgent = !UI.onlyUrgent; return render();
+    case 'only-late': UI.onlyLate = !UI.onlyLate; return render();
+    case 'f-drop':
+      if (v === 'filter') UI.filter = 'all';
+      if (v === 'brand') UI.brand = 'all';
+      if (v === 'prod') { UI.prod = 'all'; UI.sub = 'all'; }
+      if (v === 'urgent') UI.onlyUrgent = false;
+      if (v === 'late') UI.onlyLate = false;
+      return render();
+    case 'search':
+      if (UI.searching) { UI.searching = false; UI.q = ''; return render(); }
+      UI.searching = true; render(); loadAllOrders();
+      return setTimeout(() => { const q = $('#q'); if (q) q.focus(); }, 30);
+    case 'search-x': UI.searching = false; UI.q = ''; return render();
+    case 'f-clear': UI.onlyUrgent = false; UI.onlyLate = false; UI.brand = 'all'; UI.prod = 'all'; UI.sub = 'all'; UI.filter = 'all'; return render();
+    case 'new': UI.open = null; renderPop(); return openForm();
+    case 'ie-open': UI.armed = null; return startItemEdit(b.dataset.order, id || null);
+    case 'ie-cancel': UI.itemEdit = null; return renderPop();
+    case 'ie-save': return saveItemEdit();
+    case 'ie-size': UI.itemEdit.draft.size = v; return renderPop();
+    case 'ie-color': UI.itemEdit.draft.color = v; return renderPop();
+    case 'ie-qty': UI.itemEdit.draft.qty = Math.max(1, UI.itemEdit.draft.qty + Number(v)); return renderPop();
+    case 'ie-stage': {
+      const def = D.stageDefs.find(x => x.key === v), st = UI.itemEdit.draft.stages, i = st.findIndex(x => x.key === v);
+      if (i >= 0) st.splice(i, 1); else st.push({ key: def.key, name: def.name, kind: def.kind, sort: def.sort });
+      return renderPop();
+    }
+    case 'ie-stage-add': {
+      const d = UI.itemEdit.draft, val = d.extra.trim();
+      if (val) { d.stages.push({ key: 'custom', name: val, kind: 'work', sort: 1000 + d.stages.length }); d.extra = ''; }
+      return renderPop();
+    }
+    case 'ie-stage-x': UI.itemEdit.draft.stages = UI.itemEdit.draft.stages.filter(x => !(x.key === 'custom' && x.name === v)); return renderPop();
+    case 'ie-del': {
+      const IE = UI.itemEdit, o = findOrder(IE.orderId);
+      if (itemsOf(o).length <= 1) { IE.err = 'Това е единственият продукт. Изтрий цялата поръчка, ако не е нужна.'; return renderPop(); }
+      if (UI.armed !== 'item:' + IE.itemId) { UI.armed = 'item:' + IE.itemId; return renderPop(); }
+      UI.armed = null; UI.itemEdit = null;
+      toast('Продуктът е махнат');
+      return act(() => api.remove('items', IE.itemId));
+    }
+    case 'copy': {
+      if (!v) return;
+      const ok = await copyText(v);
+      return toast(ok ? `Копирано: ${v}` : 'Не успях да копирам. Задръж върху текста и избери „Копирай“.');
+    }
+    case 'phone-edit':
+      UI.editPhone = id; renderPop();
+      return setTimeout(() => { const f = $(`#ph-${id}`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }, 30);
+    case 'phone-done': {
+      const f = $(`#ph-${id}`); UI.editPhone = null;
+      return act(() => api.update('orders', id, { phone: f ? f.value.trim() : '' }));
+    }
+    case 'lv-year': UI.leaveYear = Number(v); return render();
+    case 'lv-person': UI.leavePerson = id; return renderPop();
+    case 'lv-new': return startLeaveEdit(null, id || null);
+    case 'lv-edit': return startLeaveEdit(id);
+    case 'lv-kind': UI.leaveEdit.draft.kind = v; return renderPop();
+    case 'lv-save': return saveLeave();
+    case 'lv-cancel': UI.leaveEdit = null; return renderPop();
+    case 'lv-del': {
+      const E = UI.leaveEdit;
+      if (UI.armed !== 'leave:' + E.id) { UI.armed = 'leave:' + E.id; return renderPop(); }
+      UI.armed = null; UI.leaveEdit = null;
+      await leaveAct(() => api.remove('leaves', E.id));
+      return toast('Отсъствието е изтрито');
+    }
+    case 'lv-month': {
+      const now = new Date(), cur = (UI.leaveMonth || `${now.getFullYear()}-${pad2(now.getMonth() + 1)}`).split('-').map(Number);
+      const d = new Date(cur[0], cur[1] - 1 + Number(v), 1);
+      UI.leaveMonth = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+      return render();
+    }
+    case 'lv-ww': return leaveAct(() => api.upsert('app_settings', { key: 'workweek', value: v }));
+    case 'lv-hols': UI.showHolidays = !UI.showHolidays; return render();
+    case 'lv-hol-del': return leaveAct(() => api.removeBy('holidays', 'day', v));
+    case 'lv-hol-add': {
+      const day = $('#hol-day').value, name = $('#hol-name').value.trim();
+      if (!day) return;
+      return leaveAct(() => api.upsert('holidays', { day, name }));
+    }
+    case 'work-period': UI.workPeriod = v; return loadWork();
+    case 'work-person': UI.workPerson = id; return renderPop();
+    case 'theme': setTheme(v); return render();
+    case 'stats-period': UI.statsPeriod = v; return render();
+    case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
+    case 'show-done': UI.showDone = !UI.showDone; return render();
+    case 'task-new': return startTask(null, b.dataset.order ? { order_id: b.dataset.order } : (isAdmin() && UI.person ? { assignee: UI.person } : {}));
+    case 'task-open': return startTask(id);
+    case 'task-save': return saveTask();
+    case 'task-done': {
+      const t = D.tasks.find(x => x.id === id); if (!t) return;
+      const p = stamp(t.done_at);
+      if (p.at && !undo) toast('Задачата е изпълнена', 'task-done', id);
+      if (UI.task) UI.task = null;
+      return act(() => api.update('tasks', id, { done_at: p.at, done_by: p.by }));
+    }
+    case 'task-del':
+      if (UI.armed !== 'task:' + id) { UI.armed = 'task:' + id; return renderPop(); }
+      UI.armed = null; UI.task = null;
+      return act(() => api.remove('tasks', id), { dropTask: id });
+    case 'note-add': {
+      const f = $(`#nt-${id}`), body = f ? f.value.trim() : '';
+      if (!body) return;
+      f.value = '';
+      return act(() => api.insert('order_notes', { order_id: id, body }));
+    }
+    case 'logout': await api.signOut(); me = null; return render();
+    case 'stage': {
+      // Stages are a sequence: finishing one also finishes the ones before it,
+      // and undoing one also undoes the ones after it.
+      let it, s;
+      D.orders.some(o => o.items.some(i => { const f = i.item_stages.find(x => x.id === id); if (f) { it = i; s = f; } return !!f; }));
+      if (!s) return;
+      const all = stagesOf(it), at = all.findIndex(x => x.id === id);
+      const now = new Date().toISOString();
+      const targets = s.done_at ? all.slice(at).filter(x => x.done_at) : all.slice(0, at + 1).filter(x => !x.done_at);
+      const patch = s.done_at ? { done_at: null, done_by: null } : { done_at: now, done_by: me.id };
+      // an order requested for photos goes to photos by itself once every product is made
+      const o = D.orders.find(x => x.items.includes(it));
+      const readyAfter = i => i === it ? !i.photo_at && all.slice(at + 1).every(x => x.done_at) : itemState(i).code === 'ready';
+      if (!s.done_at && o && o.photo_req && !o.packed_at && !o.waybill_at && itemsOf(o).every(readyAfter)) {
+        const now2 = new Date().toISOString();
+        showNotice('📷', 'Предай за снимане', `#${o.num} ${o.customer || ''} е готова. Отбелязах я като изпратена за снимане.`);
+        return act(() => Promise.all([
+          ...targets.map(x => api.update('item_stages', x.id, patch)),
+          ...itemsOf(o).map(i => api.update('items', i.id, { photo_at: now2, photo_by: me.id })),
+          api.update('orders', o.id, { photo_req: false })
+        ]));
+      }
+      if (!s.done_at && !undo) toast(`Отбелязано: ${s.name}`, 'stage', id);
+      return act(() => Promise.all(targets.map(x => api.update('item_stages', x.id, patch))));
+    }
+    case 'photo': {
+      let it; D.orders.some(o => (it = o.items.find(i => i.id === id)));
+      const p = stamp(it && it.photo_at);
+      if (!undo) toast(p.at ? 'Изпратено за снимане' : 'Върнато от снимане', 'photo', id);
+      return act(() => api.update('items', id, { photo_at: p.at, photo_by: p.by }));
+    }
+    case 'confirm': { const p = stamp(findOrder(id).confirmed_at); if (p.at && !undo) toast('Отбелязано: потвърждение', 'confirm', id); return act(() => api.update('orders', id, { confirmed_at: p.at, confirmed_by: p.by })); }
+    case 'pack': { const p = stamp(findOrder(id).packed_at); if (p.at && !undo) toast('Опакована · премести се в „Готови“', 'pack', id); return act(() => api.update('orders', id, { packed_at: p.at, packed_by: p.by })); }
+    case 'send-open': {
+      UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; renderPop();
+      return setTimeout(() => { const f = $(`#trk-${id}`); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } }, 60);
+    }
+    case 'send': {
+      const o = findOrder(id), f = $(`#trk-${id}`), tracking = f ? f.value.trim() : '';
+      if (!tracking) { toast('Въведи номер на товарителница.'); if (f) f.focus(); return; }
+      const now = new Date().toISOString();
+      const patch = { tracking, waybill_at: now, waybill_by: me.id };
+      if (!o.packed_at) { patch.packed_at = now; patch.packed_by = me.id; }
+      // open Viber straight from the tap (phones block it if it waits), save at the same time
+      if (o.phone) {
+        const msg = `Здравейте, това е номера на Вашата пратка ${tracking}. Скоро ще бъде при вас.\nБлагодарим ви!`;
+        const url = `viber://chat?number=${encodeURIComponent(intlPhone(o.phone))}&draft=${encodeURIComponent(msg)}`;
+        // on a computer the message is also copied, in case Viber opens without it
+        if (!isPhone) copyText(msg);
+        openExternal(url);
+      }
+      UI.open = null;
+      toast(!o.phone ? 'Завършена' : isPhone ? 'Завършена · отварям Viber' : 'Завършена · отварям Viber (съобщението е и копирано)');
+      return act(() => api.update('orders', id, patch));
+    }
+    case 'unsend': return act(() => api.update('orders', id, { waybill_at: null, waybill_by: null }));
+    case 'waybill': {
+      const o = findOrder(id), p = stamp(o.waybill_at);
+      const patch = { waybill_at: p.at, waybill_by: p.by };
+      if (p.at && !o.packed_at) { patch.packed_at = p.at; patch.packed_by = p.by; }
+      UI.open = null;
+      if (p.at && !undo) toast('Поръчката е изпратена', 'waybill', id);
+      return act(() => api.update('orders', id, patch));
+    }
+    case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
+    case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
+    case 'urgent': return act(() => api.update('orders', id, { urgent: !findOrder(id).urgent }));
+    case 'delete':
+      if (UI.armed !== id) { UI.armed = id; return render(); }
+      UI.armed = null; UI.open = null;
+      return act(() => api.remove('orders', id), { dropOrder: id });
+    case 'opt-add': {
+      const val = $(`#new-${v}`).value.trim();
+      if (!val || opts(v).some(o => o.value === val)) return;
+      return act(() => api.insert('options', { kind: v, value: val, sort: opts(v).length + 1 }), { config: true });
+    }
+    case 'opt-del': return act(() => api.remove('options', id), { config: true });
+    case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
+    case 'miss-add': {
+      const M = UI.miss; if (!M || !M.typeId || !M.size) return;
+      const val = [M.typeId, M.size, M.color].join('|');
+      if (opts('missing').some(o => o.value === val)) return toast('Вече е в списъка.');
+      toast('Добавено · поръчките с този размер отиват в „Чакат размер“');
+      return act(() => api.insert('options', { kind: 'missing', value: val, sort: opts('missing').length + 1 }), { config: true });
+    }
+    case 'miss-del': toast('Махнато · поръчките се връщат в списъка'); return act(() => api.remove('options', id), { config: true });
+    /* form */
+    case 'f-close': F = null; return renderForm();
+    case 'f-brand': F.brand = v; return renderForm();
+    case 'f-channel': F.channel = v; return renderForm();
+    case 'f-account': F.account = v; return renderForm();
+    case 'f-size': F.edit.size = v; return renderForm();
+    case 'f-color': F.edit.color = v; return renderForm();
+    case 'f-qty': F.edit.qty = Math.max(1, F.edit.qty + Number(v)); return renderForm();
+    case 'f-stage': {
+      const def = D.stageDefs.find(s => s.key === v), st = F.edit.stages;
+      const i = st.findIndex(s => s.key === v);
+      if (i >= 0) st.splice(i, 1); else st.push({ key: def.key, name: def.name, kind: def.kind, sort: def.sort });
+      return renderForm();
+    }
+    case 'f-stage-add': {
+      const val = F.edit.extra.trim();
+      if (val) { F.edit.stages.push({ key: 'custom', name: val, kind: 'work', sort: 1000 + F.edit.stages.length }); F.edit.extra = ''; }
+      return renderForm();
+    }
+    case 'f-stage-x': F.edit.stages = F.edit.stages.filter(s => !(s.key === 'custom' && s.name === v)); return renderForm();
+    case 'f-add': F.err = addDraft(); return renderForm();
+    case 'f-rm': F.items.splice(Number(v), 1); return renderForm();
+    case 'f-save': return saveOrder();
+  }
+});
+
+document.addEventListener('touchmove', ev => { if (ev.target.classList && ev.target.classList.contains('pop')) ev.preventDefault(); }, { passive: false });
+document.addEventListener('keydown', ev => {
+  if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches && ev.target.matches('.card[data-act=open]')) { ev.preventDefault(); UI.open = ev.target.dataset.id; renderPop(); }
+  if (ev.key === 'Escape' && UI.leaveEdit) { UI.leaveEdit = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.leavePerson) { UI.leavePerson = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.workPerson) { UI.workPerson = null; renderPop(); }
+  else if (ev.key === 'Escape' && UI.task) { UI.task = null; renderPop(); }
+  else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
+});
+document.addEventListener('input', ev => {
+  const t = ev.target;
+  if (UI.leaveEdit) {
+    const k = { 'lv-start': 'start', 'lv-end': 'end', 'lv-note': 'note' }[t.id];
+    if (k) {
+      const d = UI.leaveEdit.draft; d[k] = t.value;
+      if (k !== 'note') { if (k === 'start' && (!d.end || d.end < d.start)) { d.end = d.start; const en = $('#lv-end'); if (en) en.value = d.end; }
+        const c = $('#lv-count'), n = workDays(d.start, d.end);
+        if (c) c.textContent = d.start && d.end ? (d.end < d.start ? 'Крайната дата е преди началната.' : `${n} ${n === 1 ? 'работен ден' : 'работни дни'}`) : ''; }
+      return;
+    }
+  }
+  if (UI.itemEdit) {
+    const k = { 'ie-name': 'name', 'ie-note': 'note', 'ie-extra': 'extra' }[t.id];
+    if (k) { UI.itemEdit.draft[k] = t.value; return; }
+  }
+  if (t.id === 'q') { UI.q = t.value; return updateResults(); }
+  if (UI.task) {
+    const k = { 't-title': 'title', 't-note': 'note', 't-due': 'due' }[t.id];
+    if (k) { UI.task.draft[k] = t.value; return; }
+  }
+  if (!F) return;
+  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-recipient': 'recipient', 'f-address': 'address', 'f-price': 'price', 'f-note': 'note', 'f-due': 'due' };
+  if (map[t.id]) F[map[t.id]] = t.value;
+  if (t.id === 'f-phone') { const h = $('#f-phone-hint'); if (h) h.innerHTML = phoneHint(t.value); }
+  else if (t.id === 'f-name') F.edit.name = t.value;
+  else if (t.id === 'f-inote') F.edit.note = t.value;
+  else if (t.id === 'f-extra') F.edit.extra = t.value;
+});
+document.addEventListener('change', ev => {
+  const t = ev.target;
+  if (UI.tab === 'missing' && /^ms-/.test(t.id)) { const k = { 'ms-type': 'typeId', 'ms-size': 'size', 'ms-color': 'color' }[t.id]; UI.miss[k] = t.value; return render(); }
+  if (UI.leaveEdit && t.id === 'lv-user') { UI.leaveEdit.draft.user_id = t.value; return renderPop(); }
+  if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
+  if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
+  if (UI.itemEdit) {
+    if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
+    if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; return renderPop(); }
+    if (/^ie-/.test(t.id)) return;
+  }
+  if (UI.task) {
+    if (t.id === 't-urgent') { UI.task.draft.urgent = t.checked; return; }
+    if (t.id === 't-order') { UI.task.draft.order_id = t.value; return; }
+    if (t.id === 't-assignee') { UI.task.draft.assignee = t.value; return; }
+    if (t.id === 't-due') { UI.task.draft.due = t.value; return; }
+  }
+  if (F) {
+    if (t.id === 'f-type') { const keep = F.edit.qty; F.edit = blankItem(); F.edit.typeId = t.value; F.edit.qty = keep; return renderForm(); }
+    if (t.id === 'f-urgent') { F.urgent = t.checked; return; }
+    if (t.id === 'f-confirm') { F.confirm = t.checked; return; }
+    if (t.id === 'f-custom') { F.edit.custom = t.checked; return; }
+    return;
+  }
+  if (t.dataset.field === 'price') { const v = parsePrice(t.value); t.value = priceInput(v); return act(() => api.update('orders', t.dataset.id, { price: v })); }
+  // the tracking number is saved quietly, so a tap on "Изпрати" right after typing is not lost to a redraw
+  if (t.dataset.field === 'tracking') { const o = findOrder(t.dataset.id), v = t.value.trim(); if (o) o.tracking = v; api.update('orders', t.dataset.id, { tracking: v }).catch(() => {}); return; }
+  if (t.dataset.field === 'phone') { UI.editPhone = null; return act(() => api.update('orders', t.dataset.id, { phone: t.value.trim() })); }
+  if (t.dataset.field) return act(() => api.update('orders', t.dataset.id, { [t.dataset.field]: t.value.trim() }));
+  if (t.dataset.type) {
+    const list = [...new Set(t.value.split(',').map(s => s.trim()).filter(Boolean))];
+    return act(() => api.update('product_types', t.dataset.type, { [t.dataset.list]: list }), { config: true });
+  }
+});
+
+/* ---------- self-update: load the newest version when one has been published ---------- */
+async function checkVersion() {
+  if (!/^http/.test(location.protocol) || F) return;
+  const el = document.activeElement;
+  if (el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) return;
+  try {
+    const r = await fetch('version.txt?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) return;
+    const latest = (await r.text()).trim();
+    if (!latest || latest === VERSION) return;
+    let tried = '';
+    try { tried = sessionStorage.getItem('wf-tried') || ''; } catch (x) { /* optional */ }
+    if (tried === latest) return;
+    try { sessionStorage.setItem('wf-tried', latest); } catch (x) { /* optional */ }
+    location.replace(location.pathname + '?v=' + encodeURIComponent(latest));
+  } catch (x) { /* offline: keep the current version */ }
+}
+
+/* ---------- start ---------- */
+let live = false;
+async function start() {
+  render();
+  await fullLoad();
+  if (!live) {
+    live = true;
+    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, status: onLiveStatus });
+    // safety net in case a live update was missed: a light catch-up every 3 minutes while on screen
+    setInterval(() => { if (!document.hidden) refresh(); }, 3 * 60000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    window.addEventListener('online', () => refresh());
+  }
+}
+checkVersion();
+setInterval(checkVersion, 5 * 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+setTheme(themeNow());
+(async () => {
+  try { me = await api.session(); } catch (x) { me = null; }
+  if (me) start(); else render();
+})();
+})();
+</script>
+</body>
+</html>
