@@ -86,6 +86,7 @@ table.stock tr.after td:first-child{font-weight:800}
 table.stock td.low{background:#f6c445;color:#1b1b1b;font-weight:800;border-radius:6px}
 table.stock td.neg{background:var(--accent);color:var(--on-accent);font-weight:800;border-radius:6px}
 table.stock-in td{padding:4px 2px}
+button.inv{appearance:none;padding:3px 6px;border:1px solid var(--line);border-radius:6px;background:none;color:var(--soft);font:inherit;font-size:10.5px;font-weight:700;white-space:nowrap}
 table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .qp{display:flex;align-items:flex-start;gap:18px}
 .qp-p{flex:1;min-width:0}
@@ -337,7 +338,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1750';
+const VERSION = '20261118-1755';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -388,7 +389,7 @@ function realApi() {
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
     },
     async loadStock() { return ok(await sb.from('stock_levels').select('*')); },
-    async stockMoves() { return ok(await sb.from('stock_moves').select('*').in('kind', ['load', 'scrap']).order('created_at', { ascending: false }).limit(15)); },
+    async stockMoves() { return ok(await sb.from('stock_moves').select('*').in('kind', ['load', 'scrap', 'count']).order('created_at', { ascending: false }).limit(15)); },
     async addStock(rows) { ok(await sb.from('stock_moves').insert(rows)); },
     async removeStockMove(id) { ok(await sb.from('stock_moves').delete().eq('id', id)); },
     async workStats(from, to) { return ok(await sb.rpc('work_stats', { p_from: from, p_to: to })); },
@@ -1061,11 +1062,11 @@ function viewStock() {
       return `<tr class="col"><td colspan="${t.sizes.length + 1}">${e(c)}</td></tr>${line('Налични', x => x.h, 'have')}${line('Поръчани', x => x.o, 'ord')}${line('След', x => x.a, 'after')}`;
     }).join('');
     return `<section class="block"><h2><span>${e(t.name)}</span><span>${have} бр.</span></h2>
-      <div class="tbl-wrap"><table class="stock"><thead><tr><th></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      <div class="tbl-wrap"><table class="stock"><thead><tr><th><button class="inv" data-act="stock-open" data-v="count" data-id="${t.id}">Инвентаризация</button></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
   }).join('');
   const M = UI.stockMoves;
   const moves = M && M.rows ? M.rows.map(m => { const t = D.types.find(x => x.id === m.product_type_id);
-    return `<div class="miss-row"><span><b>${m.delta > 0 ? '+' : ''}${m.delta} · ${e(t ? t.name : '?')} · ${e(m.size)} · ${e(m.color)}</b><br><span class="small muted">${m.kind === 'load' ? 'Заредено' : 'Брак'} · ${e(nameOf(m.created_by) || '')} · ${e(day(m.created_at))}</span></span>
+    return `<div class="miss-row"><span><b>${m.delta > 0 ? '+' : ''}${m.delta} · ${e(t ? t.name : '?')} · ${e(m.size)} · ${e(m.color)}</b><br><span class="small muted">${m.kind === 'load' ? 'Заредено' : m.kind === 'count' ? 'Инвентаризация' : 'Брак'} · ${e(nameOf(m.created_by) || '')} · ${e(day(m.created_at))}</span></span>
       <button class="link" data-act="stock-undo" data-id="${m.id}">${UI.armed === 'mv:' + m.id ? 'Натисни пак' : 'Махни'}</button></div>`; }).join('') : '';
   return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
     <div class="top"><h1>Наличности</h1></div>
@@ -1076,8 +1077,9 @@ function viewStock() {
 function stockPopHtml() {
   const S = UI.stockEdit, tees = D.types.filter(t => t.is_tshirt), t = tees.find(x => x.id === S.typeId);
   const chips = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
-  let body = `<span class="lbl">Продукт</span><div class="chips">${tees.map(x => `<button type="button" class="chip" data-act="stock-type" data-v="${x.id}" aria-pressed="${S.typeId === x.id}">${e(x.name)}</button>`).join('')}</div>`;
-  if (t && S.mode === 'load') {
+  const title = S.mode === 'load' ? 'Зареждане' : S.mode === 'count' ? 'Инвентаризация · ' + (t ? t.name : '') : 'Брак';
+  let body = S.mode === 'count' ? '' : `<span class="lbl">Продукт</span><div class="chips">${tees.map(x => `<button type="button" class="chip" data-act="stock-type" data-v="${x.id}" aria-pressed="${S.typeId === x.id}">${e(x.name)}</button>`).join('')}</div>`;
+  if (t && (S.mode === 'load' || S.mode === 'count')) {
     body += `<div class="tbl-wrap"><table class="stock-in"><thead><tr><th></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>
       ${t.colors.map(c => `<tr><td>${e(c)}</td>${t.sizes.map(sz => `<td><input class="field" inputmode="numeric" data-stock="${e(sz)}|${e(c)}" value="${e(S.vals[sz + '|' + c] || '')}" aria-label="${e(c)} ${e(sz)}"></td>`).join('')}</tr>`).join('')}
     </tbody></table></div>`;
@@ -1085,10 +1087,10 @@ function stockPopHtml() {
     body += `<span class="lbl">Размер</span>${chips('stock-size', t.sizes, S.size)}<span class="lbl">Цвят</span>${chips('stock-color', t.colors, S.color)}
       <span class="lbl">Брой</span><div class="qty"><button type="button" data-act="stock-qty" data-v="-1" aria-label="По-малко">−</button><b>${S.qty}</b><button type="button" data-act="stock-qty" data-v="1" aria-label="Повече">+</button></div>`;
   }
-  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="stock" role="dialog" aria-modal="true" aria-label="${S.mode === 'load' ? 'Зареждане' : 'Брак'}">
-    <div class="pop-head"><b class="who">${S.mode === 'load' ? 'Зареждане' : 'Брак'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="stock" role="dialog" aria-modal="true" aria-label="${e(title)}">
+    <div class="pop-head"><b class="who">${e(title)}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
     <div class="card-body">${body}<p class="err" role="alert">${e(S.err || '')}</p>
-      ${t ? `<button class="btn wide" data-act="stock-save" ${S.busy ? 'disabled' : ''}>${S.mode === 'load' ? 'Добави към наличностите' : 'Махни от наличностите'}</button>` : ''}</div>
+      ${t ? `<button class="btn wide" data-act="stock-save" ${S.busy ? 'disabled' : ''}>${S.mode === 'load' ? 'Добави към наличностите' : S.mode === 'count' ? 'Запази наличностите' : 'Махни от наличностите'}</button>` : ''}</div>
   </div></div>`;
 }
 async function loadStockMoves() {
@@ -1112,6 +1114,16 @@ async function saveStock() {
       if (n) rows.push({ product_type_id: t.id, size, color, delta: n, kind: 'load', created_by: me.id });
     }
     if (!rows.length) { S.err = 'Попълни поне едно число.'; return renderPop(); }
+  } else if (S.mode === 'count') {
+    // what was counted replaces what the app had: store only the differences; an empty box leaves that cell as it is
+    for (const k of Object.keys(S.vals)) {
+      const raw = String(S.vals[k]).trim(); if (raw === '') continue;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) { S.err = 'Пиши само цели числа.'; return renderPop(); }
+      const [size, color] = k.split('|'), d = n - stockQty(t.id, size, color);
+      if (d) rows.push({ product_type_id: t.id, size, color, delta: d, kind: 'count', created_by: me.id });
+    }
+    if (!rows.length) { UI.stockEdit = null; renderPop(); return toast('Няма промени'); }
   } else {
     if (!S.size || !S.color) { S.err = 'Избери размер и цвят.'; return renderPop(); }
     rows = [{ product_type_id: t.id, size: S.size, color: S.color, delta: -S.qty, kind: 'scrap', created_by: me.id }];
@@ -1121,7 +1133,7 @@ async function saveStock() {
   catch (x) { S.busy = false; S.err = 'Не успях да запазя. Провери интернета и опитай пак.'; return renderPop(); }
   const n = rows.reduce((a, r) => a + Math.abs(r.delta), 0);
   UI.stockEdit = null; renderPop();
-  toast(S.mode === 'load' ? `Заредени ${n} бр.` : `Махнати ${n} бр. като брак`);
+  toast(S.mode === 'load' ? `Заредени ${n} бр.` : S.mode === 'count' ? 'Наличностите са обновени' : `Махнати ${n} бр. като брак`);
   await reloadStock();
 }
 
@@ -2060,7 +2072,11 @@ document.addEventListener('click', async ev => {
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
     case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
-    case 'stock-open': { const tees = D.types.filter(t => t.is_tshirt); UI.stockEdit = { mode: v, typeId: tees.length ? tees[0].id : '', vals: {}, size: '', color: '', qty: 1, err: '' }; return renderPop(); }
+    case 'stock-open': {
+      const tees = D.types.filter(t => t.is_tshirt), t = (v === 'count' && tees.find(x => x.id === id)) || tees[0], vals = {};
+      if (v === 'count' && t) t.colors.forEach(c => t.sizes.forEach(sz => { vals[sz + '|' + c] = String(stockQty(t.id, sz, c)); }));
+      UI.stockEdit = { mode: v, typeId: t ? t.id : '', vals, size: '', color: '', qty: 1, err: '' }; return renderPop();
+    }
     case 'stock-type': Object.assign(UI.stockEdit, { typeId: v, vals: {}, size: '', color: '', err: '' }); return renderPop();
     case 'stock-size': UI.stockEdit.size = v; return renderPop();
     case 'stock-color': UI.stockEdit.color = v; return renderPop();

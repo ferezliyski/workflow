@@ -82,7 +82,7 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - "Заяви за снимане" (`orders.photo_req`) is not a stage. Marketing flags an order. When the last production stage is finished, the person who finished it sees a big "Предай за снимане" notice. All items get `photo_at` automatically, and `photo_req` is cleared.
 - **Stock (Наличности)**, Profile → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
   - Blanks per product type × size × colour (all t-shirt types and hoodies; Slash and Meivi oversize are different blanks). Started at 0; the team loads what they have.
-  - "Зареждане" adds a grid of numbers; "Брак" takes out one size/colour; the last loads/scraps can be taken back ("Махни").
+  - "Зареждане" adds a grid of numbers; "Брак" takes out one size/colour; the small "Инвентаризация" button in each table's corner opens all cells of that model with the current numbers, and saving stores only the differences; the last loads/scraps can be taken back ("Махни").
   - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Щамповане" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red.
   - Doing "Щамповане" takes the blank off the shelf ("Печат" is DTF film, not on the shirt); undoing it puts it back.
   - Missing sizes are automatic: oldest orders get the blanks first; an order whose not-yet-pressed t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Every type is counted from 0, so before the first load all t-shirt orders wait (owner's choice).

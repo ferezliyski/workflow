@@ -58,7 +58,7 @@
       return [...out.values()];
     },
     async loadStock() { return levels(); },
-    async stockMoves() { return db.stock_moves.filter(m => m.kind === 'load' || m.kind === 'scrap').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
+    async stockMoves() { return db.stock_moves.filter(m => m.kind === 'load' || m.kind === 'scrap' || m.kind === 'count').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
     async addStock(rows) { rows.forEach(r => db.stock_moves.push({ id: ++mv, created_at: now(), ...r })); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async removeStockMove(i) { db.stock_moves = db.stock_moves.filter(m => m.id !== i); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async loadLeave() { return JSON.parse(JSON.stringify({ allowances: db.leave_allowances, leaves: db.leaves, holidays: db.holidays.slice().sort((a, b) => a.day < b.day ? -1 : 1), settings: db.app_settings })); },
