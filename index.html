@@ -45,6 +45,7 @@ h1,h2,h3,p{margin:0}
 .top{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px}
 .fbtn{appearance:none;min-height:34px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-weight:700;font-size:13px}
 .fbtn.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.h-n{font-weight:600;color:var(--soft)}
 .top-btns{display:flex;gap:8px}
 .search{display:flex;align-items:center;gap:8px;margin:-2px 0 12px}
 .search .field{flex:1}
@@ -262,7 +263,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261117-2217';
+const VERSION = '20261118-0651';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -750,7 +751,7 @@ function viewOrders() {
   const active = (UI.brand !== 'all') + (UI.prod !== 'all') + (UI.filter !== 'all');
   const which = [UI.brand, UI.sub !== 'all' ? UI.sub : UI.prod, UI.filter].filter(v => v !== 'all').join(' · ');
   const searching = UI.searching && UI.q.trim();
-  return `<div class="top"><h1>Поръчки</h1><span class="top-btns">
+  return `<div class="top"><h1>Поръчки <span class="h-n">(${f.everything.length})</span></h1><span class="top-btns">
       <button class="fbtn ${UI.searching ? 'on' : ''}" data-act="search">Търси</button>
       <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></span></div>
     ${UI.searching ? `<div class="search"><input class="field" id="q" type="search" value="${e(UI.q)}" placeholder="Име, телефон, адрес, номер, продукт…" autocomplete="off" enterkeyhint="search"><button class="link" data-act="search-x">Затвори</button></div>` : ''}
@@ -801,7 +802,7 @@ function viewSummary() {
 
 function viewDone() {
   const list = D.orders.filter(o => o.waybill_at).sort((a, b) => (a.waybill_at < b.waybill_at ? 1 : -1));
-  return `<div class="top"><h1>Готови</h1><span>последните 30 дни</span></div>
+  return `<div class="top"><h1>Готови <span class="h-n">(${list.length})</span></h1><span>последните 30 дни</span></div>
     ${list.length ? list.map(cardHtml).join('') : '<p class="empty">Още няма изпратени поръчки.</p>'}`;
 }
 
