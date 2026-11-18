@@ -100,7 +100,8 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - order notes;
   - copy buttons for name, address and phone;
   - Viber button next to the phone number;
-  - cash-on-delivery price.
+  - price per product (typed by hand, per piece); cash on delivery = the sum, without delivery;
+  - design (ready print) per t-shirt, picked from the catalogue loaded from the store (`designs`).
 - **Profile:**
   - Personal tasks: admin sees and assigns everyone's; a member sees only their own and can only tick the admin's tasks.
   - Settings are editable by everyone.
@@ -119,13 +120,11 @@ Open phones reload themselves. They compare `version.txt` with their own version
 
 ## Roadmap (agreed, not done)
 
-1. **Shopify sync** for both stores (Slash, Meivi):
-   - New site orders arrive automatically.
-   - Plan: a Supabase Edge Function receives Shopify webhooks (orders/create, orders/updated, fulfillments/create|update) and verifies the HMAC.
-   - Each store gets a custom app with an Admin API token. Keep the tokens and secrets only in Supabase secrets, never in the repo.
-   - Map line items and variants to `product_types` and size/colour, with channel 'Сайт'.
-   - When izprati.bg creates a fulfilment with tracking, fill `tracking` and decide with the owner whether to auto-complete.
-   - Avoid duplicates: store the Shopify order id (new column).
+1. **Shopify sync** for both stores (Slash, Meivi). The Slash side is built (18.11.2026); see `supabase/schema.md` → "Shopify sync".
+   - Still to do for Slash: the owner adds the webhooks in Shopify (Settings → Notifications → Webhooks, URL with `?shop=slash`; topics: Order creation, Order update, Order cancellation, Fulfillment creation, Fulfillment update, Product creation, Product update, Product deletion) and puts the signing secret in Supabase as `SHOPIFY_SECRET_SLASH`. Guide him step by step. Then test with a real order.
+   - Meivi: when the store is finished, review its products (personal gifts have extra fields), map them to product types, load the designs, add the webhooks with `?shop=meivi`.
+   - Open decisions: complete the order automatically when izprati.bg adds tracking? What to do with orders paid online (now shown as "Платена", price still counts)?
+   - Manual orders stay only in the app; they are not created in Shopify.
 2. Deactivate a member (someone leaves the team) without deleting their history.
 3. Backups (the free plan has no point-in-time restore): e.g. a scheduled export.
 4. Optional: change name and password; team chat; push notifications (e.g. "Предай за снимане" to the marketing person's phone).

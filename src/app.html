@@ -328,7 +328,7 @@ function realApi() {
     async signOut() { await sb.auth.signOut(); },
     async load() {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
-      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history] = await Promise.all([
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history, designs] = await Promise.all([
         sb.from('members').select('*'),
         sb.from('options').select('*').order('sort'),
         sb.from('stage_defs').select('*').order('sort'),
@@ -337,9 +337,10 @@ function realApi() {
         sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
         sb.from('tasks').select('*').order('created_at'),
         sb.from('order_notes').select('*').order('created_at'),
-        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt, price)').order('created_at')
+        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt, price)').order('created_at'),
+        sb.from('designs').select('id, brand, name, kind, product_type_id').eq('active', true).order('name')
       ]);
-      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history), designs: ok(designs) };
     },
     // only what changed since a moment: orders (with their products and stages), tasks and notes
     async syncSince(iso) {
@@ -391,7 +392,7 @@ const api = window.__mockApi || realApi();
 
 /* ---------- state ---------- */
 let me = null;
-let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [] };
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [] };
 const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
@@ -478,7 +479,9 @@ function orderTags(o) {
 const isLate = o => o.due && !o.waybill_at && o.due < today();
 const activeOrders = () => D.orders.filter(o => !o.waybill_at).sort((a, b) =>
   (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1));
-const itemLabel = it => [it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, it.size, it.color].filter(Boolean).join(' · ');
+const itemLabel = it => [it.design, it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, it.size, it.color].filter(Boolean).join(' · ');
+const designsOf = typeId => (D.designs || []).filter(x => x.kind === 'single' && x.product_type_id === typeId);
+const designPick = (id, typeId, cur) => { const l = designsOf(typeId); return l.length ? `<label class="lbl" for="${id}">Дизайн</label><select class="field" id="${id}"><option value="">—</option>${cur && !l.some(x => x.name === cur) ? `<option selected>${e(cur)}</option>` : ''}${l.map(x => `<option ${x.name === cur ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</select>` : ''; };
 
 /* ---------- views ---------- */
 function viewAuth() {
@@ -509,8 +512,10 @@ function dots(it, waiting) {
   return `<span class="dots ${waiting ? 'waiting' : ''}" aria-hidden="true">${stagesOf(it).map(s => `<i class="${s.done_at ? 'on' : ''}"></i>`).join('')}</span>`;
 }
 function cardHtml(o) {
-  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
+  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ') + (o.shop_name ? ' ' + o.shop_name : '');
   const badges = [
+    o.cancelled_at ? '<span class="badge urgent">Отказана в сайта</span>' : '',
+    o.paid ? '<span class="badge">Платена</span>' : '',
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
     o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
@@ -536,7 +541,7 @@ function cardHtml(o) {
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
   else if (allReady) orderRow = nowRow('Изпращане', 'work', 'send-open', o.id, 'Изпрати') +
-    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
+    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && (o.paid ? 'Платена ' : 'НП ') + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
@@ -556,7 +561,7 @@ function itemEditorHtml(o) {
   const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
   let body = '';
   if (t && t.is_tshirt) {
-    body = `<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
+    body = `${designPick('ie-design', t.id, d.design)}<span class="lbl">Размер</span>${pick('ie-size', t.sizes, d.size)}
       <span class="lbl">Цвят</span>${pick('ie-color', t.colors, d.color)}
       <label class="check"><input type="checkbox" id="ie-custom" ${d.custom ? 'checked' : ''}>Дизайн по желание на клиента</label>`;
   } else if (d.typeId === 'custom') {
@@ -587,7 +592,7 @@ function startItemEdit(orderId, itemId) {
   const o = findOrder(orderId), it = itemId && itemsOf(o).find(x => x.id === itemId);
   const draft = blankItem();
   if (it) {
-    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, price: priceInput(it.price), custom: it.custom_design, note: it.note,
+    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, price: priceInput(it.price), design: it.design || '', custom: it.custom_design, note: it.note,
       stages: stagesOf(it).map(x => ({ key: x.stage_key, name: x.name, kind: x.kind, sort: x.sort })) });
   }
   UI.itemEdit = { orderId, itemId: it ? it.id : null, draft, orig: it ? { typeId: draft.typeId, custom: draft.custom, stages: draft.stages.map(x => x.name).join('|') } : null, err: '' };
@@ -613,7 +618,7 @@ async function saveItemEdit() {
       id: IE.itemId || '', order_id: IE.orderId, product_type_id: d.typeId === 'custom' ? '' : d.typeId,
       name: d.typeId === 'custom' ? d.name.trim() : t.name, is_tshirt: !!(t && t.is_tshirt),
       size: t && t.is_tshirt ? d.size : '', color: t && t.is_tshirt ? d.color : '', qty: d.qty,
-      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), price: priceStr(d.price), reset_stages: reset, stages: draftStages(d)
+      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), price: priceStr(d.price), design: t && t.is_tshirt ? d.design : '', reset_stages: reset, stages: draftStages(d)
     });
     UI.itemEdit = null;
     toast(IE.itemId ? 'Продуктът е променен' : 'Продуктът е добавен');
@@ -651,10 +656,10 @@ function bodyHtml(o) {
     }).join('')}</div>` : ''}
     <label class="lbl" for="rcp-${o.id}">Име за доставка</label>
     <div class="inline"><input class="field" id="rcp-${o.id}" data-field="recipient" data-id="${o.id}" value="${e(o.recipient || '')}" autocomplete="off"><button class="copy" data-act="copy" data-v="${e(shipName(o))}">Копирай</button></div>
-    <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
+    <label class="lbl" for="adr-${o.id}">Адрес за доставка${o.delivery ? ' · ' + e(o.delivery) : ''}</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
     ${itemsOf(o).some(it => it.price != null)
-      ? `<span class="lbl">Наложен платеж</span><p class="cod">${e(money(o.price))}</p>`
+      ? `<span class="lbl">${o.paid ? 'Платена с карта' : 'Наложен платеж'}</span><p class="cod">${e(money(o.price))}</p>`
       : `<label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
     <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">`}
     ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
@@ -741,7 +746,7 @@ function renderPop() {
   lockPage();
   const prev = box.querySelector('.pop-in');
   const keepY = prev ? prev.scrollTop : 0;
-  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
+  const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ') + (o.shop_name ? ' ' + o.shop_name : '');
   box.innerHTML = `<div class="pop" data-act="close-pop"><div class="pop-in" role="dialog" aria-modal="true" aria-label="Поръчка ${o.num}">
     <div class="pop-head"><div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
       <button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
@@ -857,8 +862,8 @@ function searchPool() {
 const norm = v => String(v == null ? '' : v).toLowerCase();
 function haystack(o) {
   const parts = [o.num, '#' + o.num, o.customer, o.recipient, o.phone, String(o.phone || '').replace(/\D/g, ''), o.address,
-    o.price != null ? priceInput(o.price) + ' ' + o.price : '', o.brand, o.channel, o.account, o.note, o.problem, o.tracking,
-    ...(o.items || []).map(it => [it.name, it.size, it.color, it.note].join(' ')),
+    o.price != null ? priceInput(o.price) + ' ' + o.price : '', o.brand, o.channel, o.account, o.note, o.problem, o.tracking, o.shop_name, o.delivery,
+    ...(o.items || []).map(it => [it.design, it.name, it.size, it.color, it.note, it.sku].join(' ')),
     ...notesOf(o.id).map(n => n.body)];
   return norm(parts.join(' '));
 }
@@ -1441,7 +1446,7 @@ function render() {
 }
 
 /* ---------- new order form ---------- */
-const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, price: '', custom: false, note: '', stages: [], extra: '' });
+const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, price: '', design: '', custom: false, note: '', stages: [], extra: '' });
 function phoneHint(phone) {
   const k = phoneKey(phone);
   const list = k ? D.history.filter(h => phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : [];
@@ -1465,7 +1470,7 @@ function editorHtml() {
   const pick = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
   let body = '';
   if (t && t.is_tshirt) {
-    body = `<span class="lbl">Размер</span>${pick('f-size', t.sizes, it.size)}
+    body = `${designPick('f-design', t.id, it.design)}<span class="lbl">Размер</span>${pick('f-size', t.sizes, it.size)}
       <span class="lbl">Цвят</span>${pick('f-color', t.colors, it.color)}
       <label class="check"><input type="checkbox" id="f-custom" ${it.custom ? 'checked' : ''}>Дизайн по желание на клиента</label>`;
   } else if (it.typeId === 'custom') {
@@ -1508,7 +1513,7 @@ function renderForm() {
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
     <span class="lbl">Продукти</span>
-    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ name: it.name, qty: it.qty, size: it.size, color: it.color }))}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
+    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ design: it.design, name: it.name, qty: it.qty, size: it.size, color: it.color }))}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
     ${editorHtml()}
     <p class="cod" id="f-total">${e(formTotal())}</p>
     <label class="lbl" for="f-due">Срок (по желание)</label><input class="field" id="f-due" type="date" value="${e(F.due)}">
@@ -1553,7 +1558,7 @@ async function saveOrder() {
       items: F.items.map(it => ({
         product_type_id: it.typeId === 'custom' ? '' : it.typeId, name: it.name.trim(),
         is_tshirt: !!(typeOf(it.typeId) || {}).is_tshirt, size: it.size, color: it.color, qty: it.qty,
-        custom_design: it.custom, note: it.note.trim(), price: priceStr(it.price), stages: draftStages(it)
+        custom_design: it.custom, note: it.note.trim(), price: priceStr(it.price), design: it.design || '', stages: draftStages(it)
       }))
     });
     F = null; renderForm(); UI.tab = 'orders'; UI.filter = 'all';
@@ -1993,6 +1998,7 @@ document.addEventListener('change', ev => {
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
     if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note, price: d.price }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
+    if (t.id === 'ie-design') { UI.itemEdit.draft.design = t.value; return; }
     if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; return renderPop(); }
     if (/^ie-/.test(t.id)) return;
   }
@@ -2006,6 +2012,7 @@ document.addEventListener('change', ev => {
     if (t.id === 'f-type') { const keep = F.edit.qty; F.edit = blankItem(); F.edit.typeId = t.value; F.edit.qty = keep; return renderForm(); }
     if (t.id === 'f-urgent') { F.urgent = t.checked; return; }
     if (t.id === 'f-confirm') { F.confirm = t.checked; return; }
+    if (t.id === 'f-design') { F.edit.design = t.value; return; }
     if (t.id === 'f-custom') { F.edit.custom = t.checked; return; }
     return;
   }

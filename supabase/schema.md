@@ -18,7 +18,10 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - packing: packed_at/by
   - completion: waybill_at/by (= "Завършена"), tracking
   - record: created_by, created_at, updated_at
-- **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, price (per piece; null on old orders), custom_design, note, photo_at/by (= on photo shoot), sort, created_at
+  - from the store: shop_order_id (Shopify order id, unique per brand), shop_name (e.g. #1005), delivery (shipping method title), paid (paid online), cancelled_at (cancelled in the store)
+- **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, price (per piece; null on old orders), design (name of the ready print, '' if none), sku (from the store), custom_design, note, photo_at/by (= on photo shoot), sort, created_at
+- **designs**: id, brand, name, kind ('single' | 'set'), sku (single: SKU without `-BLACK-3`; set: whole SKU), product_type_id, shop_product_id, active. The catalogue of ready prints, filled from Shopify. Members can only read.
+- **shop_events**: log of what arrived from the stores (brand, topic, shop_order_id, result, received_at). No customer data. Admin can read.
 - **item_stages**: id, item_id, stage_key, name, kind, sort, done_at/by. Each item gets its own copy of its stages.
 - **order_notes**: id, order_id, body, author, created_at
 - **tasks**: id, title, note, due, urgent, assignee, created_by, order_id, done_at/by, created_at, updated_at
@@ -50,6 +53,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
 
 - `create_order(p jsonb)` inserts an order with its items and their stages in one call.
 - `save_item(p jsonb)` adds or edits an item. With `reset_stages`, it also replaces the item's stages.
+- `shopify_event(p_brand, p_topic, p jsonb)`: the single entry point for Shopify webhooks, service role only. See "Shopify sync" below.
 - `work_stats(p_from, p_to)`: work per person. Security invoker, admin only (checked inside).
 
 To read a function's full definition: `select pg_get_functiondef('public.create_order'::regproc);`
@@ -57,3 +61,17 @@ To read a function's full definition: `select pg_get_functiondef('public.create_
 ## Realtime publication
 
 members, options, product_types, product_type_stages, orders, tasks, order_notes
+
+## Shopify sync
+
+- Edge Function `shopify-webhook` (source in `supabase/functions/shopify-webhook/`, deployed with verify_jwt off). URL: `https://aetwuxgetazirjnacnuu.supabase.co/functions/v1/shopify-webhook?shop=slash` (later `?shop=meivi`).
+- It checks the Shopify HMAC with the secret `SHOPIFY_SECRET_SLASH` / `SHOPIFY_SECRET_MEIVI` (Supabase → Edge Functions → Secrets; the signing secret from Shopify → Settings → Notifications → Webhooks). Without the secret it answers 401. Never put the secret in the repo.
+- Then it calls `public.shopify_event(brand, topic, payload)`:
+  - `orders/create`: makes the order (channel 'Сайт', needs_confirm = true, name/phone/address from the shipping address, +359 → 0). Only this topic creates orders; a second delivery of the same order is ignored (unique index).
+  - Line items: SKU `BASE-BLACK|WHITE-N` → design by BASE, colour, size = N-th size of the product type. Price = unit price minus discounts. Stages = the non-optional stages of the product type (no design/approval).
+  - Sets (`designs.kind = 'set'`): two items, sizes and colours from the line item properties "Дамска/Мъжка тениска — размер/цвят", price split in half.
+  - Unknown SKU: item with the store title, no stages, and `orders.problem = 'Непознат продукт от сайта'`.
+  - `orders/updated`, `orders/cancelled`: only update cancelled_at and paid on an order that already exists.
+  - `fulfillments/create|update`: fill `tracking` (the order is NOT completed automatically).
+  - `products/create|update|delete`: keep `designs` up to date.
+- Cash on delivery (`orders.price`) = sum of item prices, without delivery.

@@ -73,6 +73,14 @@ This file continues the work from an earlier chat with Claude. Read it together 
     - When the order is made and packing comes next, a big "Предай за снимане" notice appears on a white background, and the order is automatically marked as on photo shoot.
 14. **18.11.** The source code, tests, CLAUDE.md and this file were moved into the repo. Last published version at the move: 20261118-1300.
 
+15. **18.11, moved to Claude Code on the Mac.** Small changes: black profile buttons; statistics split into "Meivi тениски" and "Meivi подаръци".
+16. **18.11, prices.** Each product has its own price, typed by hand when adding it (the owner does not want default prices for now). Cash on delivery is the sum of the products, without delivery. Old orders keep their total.
+17. **18.11, Slash integration prepared.**
+    - The 96 Slash products (87 t-shirts, 9 sets) are loaded as designs. Manual orders pick the design from the same list.
+    - Site orders will arrive by themselves, always "за потвърждение" (the team calls every customer), without design/approval stages. Sets become two t-shirts.
+    - A cancelled site order is not deleted; it gets the badge "Отказана в сайта".
+    - Waiting for the owner: add the webhooks in Shopify and the secret in Supabase (see CLAUDE.md → Roadmap).
+
 ## Still to do (in the owner's order)
 
 1. **Synchronisation with the Shopify stores** (Slash and Meivi). The plan is in CLAUDE.md → Roadmap.

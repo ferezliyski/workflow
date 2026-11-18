@@ -32,7 +32,7 @@
     async load() {
       calls.load++;
       const c = JSON.parse(JSON.stringify(db));
-      return sent({ members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
+      return sent({ designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
         history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt, price: i.price })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
@@ -59,8 +59,8 @@
     async loadAll() { calls.loadAll++; return sent(JSON.parse(JSON.stringify(db.orders.map(full)))); },
     async saveItem(p) {
       let iid = p.id;
-      if (!iid) { iid = id(); db.items.push({ id: iid, order_id: p.order_id, product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price), photo_at: null, sort: db.items.filter(i => i.order_id === p.order_id).length }); }
-      else { Object.assign(db.items.find(i => i.id === iid), { product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price) }); if (p.reset_stages) db.item_stages = db.item_stages.filter(s => s.item_id !== iid); }
+      if (!iid) { iid = id(); db.items.push({ id: iid, order_id: p.order_id, product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price), design: p.design || '', photo_at: null, sort: db.items.filter(i => i.order_id === p.order_id).length }); }
+      else { Object.assign(db.items.find(i => i.id === iid), { product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price), design: p.design || '' }); if (p.reset_stages) db.item_stages = db.item_stages.filter(s => s.item_id !== iid); }
       if (!p.id || p.reset_stages) p.stages.forEach((s, j) => db.item_stages.push({ id: id(), item_id: iid, stage_key: s.key, name: s.name, kind: s.kind, sort: j, done_at: null, done_by: null }));
       syncPrice(p.order_id);
       touch(p.order_id, window.__silent);
@@ -69,7 +69,7 @@
     async createOrder(p) {
       const o = { id: id(), num: ++num, customer: p.customer, phone: p.phone, recipient: p.recipient || '', address: p.address, price: p.price === '' || p.price == null ? null : Number(p.price), brand: p.brand, channel: p.channel, account: p.account, note: p.note, problem: '', urgent: p.urgent, due: p.due || null, needs_confirm: p.needs_confirm, confirmed_at: null, packed_at: null, waybill_at: null, tracking: '', created_by: user.id, created_at: now(), updated_at: now() };
       db.orders.push(o);
-      p.items.forEach((it, i) => { const iid = id(); db.items.push({ id: iid, order_id: o.id, product_type_id: it.product_type_id || null, name: it.name, is_tshirt: it.is_tshirt, size: it.size, color: it.color, qty: it.qty, custom_design: it.custom_design, note: it.note, price: num0(it.price), photo_at: null, sort: i });
+      p.items.forEach((it, i) => { const iid = id(); db.items.push({ id: iid, order_id: o.id, product_type_id: it.product_type_id || null, name: it.name, is_tshirt: it.is_tshirt, size: it.size, color: it.color, qty: it.qty, custom_design: it.custom_design, note: it.note, price: num0(it.price), design: it.design || '', photo_at: null, sort: i });
         it.stages.forEach((s, j) => db.item_stages.push({ id: id(), item_id: iid, stage_key: s.key, name: s.name, kind: s.kind, sort: j, done_at: null, done_by: null })); });
       syncPrice(o.id);
       if (rt && !window.__silent) setTimeout(() => rt.orders({ eventType: 'INSERT', new: { ...o } }), 30);
