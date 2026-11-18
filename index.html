@@ -96,14 +96,14 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .card-top .badge{background:none;color:var(--on-band);box-shadow:inset 0 0 0 1.5px var(--on-band)}
 .card-top .badge.urgent,.card-top .badge.late{background:var(--accent);color:var(--on-accent);box-shadow:none}
 .card-top .badge.photo-req{background:#f2c94c;color:#1b1b1b;box-shadow:none}
-.notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:24px}
-.notice{background:var(--card);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
+.notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
+.notice{background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.35);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
 .notice .ico{font-size:44px;line-height:1}
 .notice h2{font-size:24px;margin:10px 0 6px}
-.notice p{margin:0 0 18px;color:var(--muted)}
+.notice p{margin:0 0 18px;color:var(--soft)}
 .card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
 .nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
-.nosize-btn span{color:var(--muted);font-weight:600;font-size:13px}
+.nosize-btn span{color:var(--soft);font-weight:600;font-size:13px}
 .miss-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .miss-row:last-child{border-bottom:0}
 .card-top .badge.bad{background:var(--on-band);color:var(--band);box-shadow:none}
@@ -313,7 +313,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1040';
+const VERSION = '20261118-1043';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
