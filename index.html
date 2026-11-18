@@ -302,7 +302,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1004';
+const VERSION = '20261118-1007';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -418,13 +418,7 @@ function intlPhone(p) {
 }
 // opens viber:// without leaving the app: on a computer through a hidden frame (the page stays), on a phone directly
 const isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
-function openExternal(url) {
-  window.__lastViber = url;
-  if (isPhone) { window.location.href = url; return; }
-  let fr = document.getElementById('ext-frame');
-  if (!fr) { fr = document.createElement('iframe'); fr.id = 'ext-frame'; fr.style.display = 'none'; document.body.appendChild(fr); }
-  fr.src = 'about:blank'; setTimeout(() => { fr.src = url; }, 0);
-}
+function openExternal(url) { window.__lastViber = url; window.location.href = url; }
 const viberLink = p => `viber://chat?number=${encodeURIComponent(intlPhone(p))}`;
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (x) { /* older way below */ }
@@ -1787,11 +1781,12 @@ document.addEventListener('click', async ev => {
       if (o.phone) {
         const msg = `Здравейте, това е номера на Вашата пратка ${tracking}. Скоро ще бъде при вас.\nБлагодарим ви!`;
         const url = `viber://chat?number=${encodeURIComponent(intlPhone(o.phone))}&draft=${encodeURIComponent(msg)}`;
-        // on a computer Opera quits on viber:// links, so the message is copied instead
-        if (isPhone) openExternal(url); else copyText(msg);
+        // on a computer the message is also copied, in case Viber opens without it
+        if (!isPhone) copyText(msg);
+        openExternal(url);
       }
       UI.open = null;
-      toast(!o.phone ? 'Завършена' : isPhone ? 'Завършена · отварям Viber' : 'Завършена · съобщението е копирано');
+      toast(!o.phone ? 'Завършена' : isPhone ? 'Завършена · отварям Viber' : 'Завършена · отварям Viber (съобщението е и копирано)');
       return act(() => api.update('orders', id, patch));
     }
     case 'unsend': return act(() => api.update('orders', id, { waybill_at: null, waybill_by: null }));
