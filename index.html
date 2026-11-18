@@ -316,7 +316,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1321';
+const VERSION = '20261118-1448';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -343,7 +343,7 @@ function realApi() {
         sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
         sb.from('tasks').select('*').order('created_at'),
         sb.from('order_notes').select('*').order('created_at'),
-        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty)').order('created_at')
+        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt)').order('created_at')
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
     },
@@ -1017,6 +1017,11 @@ function groupBy(list, keyFn) {
   list.forEach(o => { const k = keyFn(o); if (!k) return; const g = m.get(k) || { k, n: 0, sum: 0 }; g.n++; g.sum += Number(o.price) || 0; m.set(k, g); });
   return [...m.values()].map(g => Object.assign(g, { v: g.n })).sort((a, b) => b.n - a.n || b.sum - a.sum);
 }
+function storeKey(h) {
+  if (h.brand !== 'Meivi') return h.brand;
+  const its = h.items || [], t = its.some(i => i.is_tshirt), g = its.some(i => !i.is_tshirt);
+  return t && g ? 'Meivi смесени' : t ? 'Meivi тениски' : g ? 'Meivi подаръци' : 'Meivi';
+}
 function viewStats() {
   const [from, to] = periodRange(UI.statsPeriod);
   const inRange = h => { const d = new Date(h.created_at); return (!from || d >= from) && (!to || d < to); };
@@ -1050,7 +1055,7 @@ function viewStats() {
       ${tile('Повторни клиенти', String(repeat), list.length ? `${Math.round(repeat / list.length * 100)}% от поръчките` : '')}
     </div>
     ${list.length ? '' : '<p class="empty">Няма поръчки за този период.</p>'}
-    ${barList('По магазин', groupBy(list, h => h.brand), cnt)}
+    ${barList('По магазин', groupBy(list, storeKey), cnt)}
     ${barList('По канал', groupBy(list, h => h.channel), cnt)}
     ${barList('TikTok акаунти на Meivi', groupBy(list.filter(h => h.brand === 'Meivi' && h.channel === 'TikTok'), h => h.account || 'Без акаунт'), cnt)}
     ${barList('Продукти (бройки)', prods, r => `${r.v} бр.`)}
@@ -1550,7 +1555,7 @@ let lastSync = 0, pendingRedraw = false;
 const RECENT_MS = 30 * 864e5;
 const keepInList = o => !o.waybill_at || Date.now() - new Date(o.waybill_at).getTime() < RECENT_MS;
 const lightOf = o => ({ id: o.id, num: o.num, customer: o.customer, phone: o.phone, price: o.price, brand: o.brand, channel: o.channel,
-  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty })) });
+  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty, is_tshirt: it.is_tshirt })) });
 function upsert(list, row, key = 'id') { const i = list.findIndex(x => x[key] === row[key]); if (i >= 0) list[i] = row; else list.push(row); }
 function mergeOrder(o) {
   if (keepInList(o)) upsert(D.orders, o); else D.orders = D.orders.filter(x => x.id !== o.id);

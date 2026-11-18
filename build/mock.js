@@ -32,7 +32,7 @@
       const c = JSON.parse(JSON.stringify(db));
       return sent({ members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
-        history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty })) })),
+        history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
     },
     async syncSince(iso) {
