@@ -158,6 +158,10 @@ a{color:var(--ink)}
 .fnow-n{font-size:12.5px;color:var(--soft);margin-left:4px}
 .fdone{position:sticky;bottom:0;display:flex;gap:8px;padding:12px 16px calc(12px + env(safe-area-inset-bottom, 0px));background:var(--surface);border-top:1px solid var(--line)}
 .fdone .btn{flex:1}
+.sent{display:flex;align-items:center;flex-wrap:wrap;gap:4px 10px;margin-top:10px;font-weight:700;color:var(--next)}
+.sent .link{padding:2px 0;font-size:13px;color:var(--soft)}
+.btn.send{margin-top:10px}
+.sec{display:flex;align-items:baseline;gap:6px;margin:6px 2px 10px;font-size:14px;font-weight:800;letter-spacing:.02em}
 .star{margin-left:5px;color:#E0A100}
 .prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
 .prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
@@ -298,7 +302,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0941';
+const VERSION = '20261118-0953';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -513,10 +517,10 @@ function cardHtml(o) {
     return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
   }).join('');
   let orderRow = '';
-  if (done) orderRow = `<p class="ready">✓ Изпратена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
+  if (done) orderRow = `<p class="ready">✓ Завършена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
-  else if (allReady) orderRow = nowRow('Писане на товарителница', 'work', 'waybill', o.id, 'Готово') +
+  else if (allReady) orderRow = nowRow('Изпращане', 'work', 'send-open', o.id, 'Изпрати') +
     ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
@@ -639,10 +643,13 @@ function bodyHtml(o) {
     ${items}
     <div class="sep"><div class="steps">
       ${stepBtn('pack', o.id, 'Опаковано', o.packed_at, o.packed_by)}
-      ${stepBtn('waybill', o.id, 'Товарителница написана', o.waybill_at, o.waybill_by)}
     </div></div>
     <label class="lbl" for="trk-${o.id}">Номер на товарителница</label>
     <input class="field" id="trk-${o.id}" data-field="tracking" data-id="${o.id}" value="${e(o.tracking)}" inputmode="text" autocomplete="off">
+    ${o.waybill_at
+      ? `<p class="sent">✓ Завършена · ${e(nameOf(o.waybill_by) || '')} · ${e(day(o.waybill_at))} <button class="link" data-act="unsend" data-id="${o.id}">Върни</button></p>`
+      : `<button class="btn wide send" data-act="send" data-id="${o.id}">Изпрати</button>
+         ${o.phone ? '' : '<p class="small muted" style="margin-top:6px">Няма телефон за Viber.</p>'}`}
     <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
     <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" autocomplete="off">
     <span class="lbl">Бележки</span>
@@ -727,7 +734,7 @@ function renderPop() {
 const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
 const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
 function filterData() {
-  const everything = activeOrders();
+  const everything = activeOrders().filter(o => !o.packed_at);
   // store filter first; everything below is counted within the chosen store
   const brandCounts = {};
   everything.forEach(o => { if (o.brand) brandCounts[o.brand] = (brandCounts[o.brand] || 0) + 1; });
@@ -899,9 +906,13 @@ function viewSummary() {
 }
 
 function viewDone() {
-  const list = D.orders.filter(o => o.waybill_at).sort((a, b) => (a.waybill_at < b.waybill_at ? 1 : -1));
-  return `<div class="top"><h1>Готови <span class="h-n">(${list.length})</span></h1><span>последните 30 дни</span></div>
-    ${list.length ? list.map(cardHtml).join('') : '<p class="empty">Още няма изпратени поръчки.</p>'}`;
+  const toSend = D.orders.filter(o => o.packed_at && !o.waybill_at).sort((a, b) => (b.urgent - a.urgent) || (a.packed_at < b.packed_at ? -1 : 1));
+  const sent = D.orders.filter(o => o.waybill_at).sort((a, b) => (a.waybill_at < b.waybill_at ? 1 : -1));
+  return `<div class="top"><h1>Готови <span class="h-n">(${toSend.length + sent.length})</span></h1></div>
+    <h2 class="sec">За изпращане <span class="h-n">(${toSend.length})</span></h2>
+    ${toSend.length ? toSend.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px 24px">Няма опаковани поръчки за изпращане.</p>'}
+    <h2 class="sec">Завършени · последните 30 дни <span class="h-n">(${sent.length})</span></h2>
+    ${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`;
 }
 
 function viewSettings() {
@@ -1752,7 +1763,29 @@ document.addEventListener('click', async ev => {
       return act(() => api.update('items', id, { photo_at: p.at, photo_by: p.by }));
     }
     case 'confirm': { const p = stamp(findOrder(id).confirmed_at); if (p.at && !undo) toast('Отбелязано: потвърждение', 'confirm', id); return act(() => api.update('orders', id, { confirmed_at: p.at, confirmed_by: p.by })); }
-    case 'pack': { const p = stamp(findOrder(id).packed_at); if (p.at && !undo) toast('Отбелязано: опаковане', 'pack', id); return act(() => api.update('orders', id, { packed_at: p.at, packed_by: p.by })); }
+    case 'pack': { const p = stamp(findOrder(id).packed_at); if (p.at && !undo) toast('Опакована · премести се в „Готови“', 'pack', id); return act(() => api.update('orders', id, { packed_at: p.at, packed_by: p.by })); }
+    case 'send-open': {
+      UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; renderPop();
+      return setTimeout(() => { const f = $(`#trk-${id}`); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } }, 60);
+    }
+    case 'send': {
+      const o = findOrder(id), f = $(`#trk-${id}`), tracking = f ? f.value.trim() : '';
+      if (!tracking) { toast('Въведи номер на товарителница.'); if (f) f.focus(); return; }
+      const now = new Date().toISOString();
+      const patch = { tracking, waybill_at: now, waybill_by: me.id };
+      if (!o.packed_at) { patch.packed_at = now; patch.packed_by = me.id; }
+      // open Viber straight from the tap (phones block it if it waits), save at the same time
+      if (o.phone) {
+        const msg = `Здравейте, това е номера на Вашата пратка ${tracking}. Скоро ще бъде при вас.\nБлагодарим ви!`;
+        const url = `viber://chat?number=${encodeURIComponent(intlPhone(o.phone))}&draft=${encodeURIComponent(msg)}`;
+        window.__lastViber = url;
+        window.location.href = url;
+      }
+      UI.open = null;
+      toast(o.phone ? 'Завършена · отварям Viber' : 'Завършена');
+      return act(() => api.update('orders', id, patch));
+    }
+    case 'unsend': return act(() => api.update('orders', id, { waybill_at: null, waybill_by: null }));
     case 'waybill': {
       const o = findOrder(id), p = stamp(o.waybill_at);
       const patch = { waybill_at: p.at, waybill_by: p.by };
@@ -1860,6 +1893,8 @@ document.addEventListener('change', ev => {
     return;
   }
   if (t.dataset.field === 'price') { const v = parsePrice(t.value); t.value = priceInput(v); return act(() => api.update('orders', t.dataset.id, { price: v })); }
+  // the tracking number is saved quietly, so a tap on "Изпрати" right after typing is not lost to a redraw
+  if (t.dataset.field === 'tracking') { const o = findOrder(t.dataset.id), v = t.value.trim(); if (o) o.tracking = v; api.update('orders', t.dataset.id, { tracking: v }).catch(() => {}); return; }
   if (t.dataset.field === 'phone') { UI.editPhone = null; return act(() => api.update('orders', t.dataset.id, { phone: t.value.trim() })); }
   if (t.dataset.field) return act(() => api.update('orders', t.dataset.id, { [t.dataset.field]: t.value.trim() }));
   if (t.dataset.type) {
