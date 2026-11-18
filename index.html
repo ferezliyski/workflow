@@ -145,6 +145,7 @@ td.miss{background:#f6c445;color:#1b1b1b;border-radius:6px;white-space:nowrap}
 .card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
 .nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 .nosize-btn span{color:var(--soft);font-weight:600;font-size:13px}
+.nosize-btn.photo{border-color:var(--photo)}
 .miss-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
 .miss-row:last-child{border-bottom:0}
 .card-top .badge.bad{background:var(--on-band);color:var(--band);box-shadow:none}
@@ -358,7 +359,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-2135';
+const VERSION = '20261118-2145';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -916,8 +917,10 @@ const retTaken = it => (D.returns || []).filter(r => r.used_item_id === it.id);
 // an order waits for a size while a product that is not yet made has no blank left
 const sizeWaitItems = o => o.packed_at || o.waybill_at ? [] : itemsOf(o).filter(it => itemState(it).code !== 'ready' && missingFor(it));
 const waitsSize = o => sizeWaitItems(o).length > 0;
+// at the photo shoot: out of the main list, in its own "За снимане" list, until every product is brought back
+const atShoot = o => !o.packed_at && !o.waybill_at && itemsOf(o).some(it => it.photo_at);
 function filterData() {
-  const everything = activeOrders().filter(o => !o.packed_at && !waitsSize(o));
+  const everything = activeOrders().filter(o => !o.packed_at && !waitsSize(o) && !atShoot(o));
   // store filter first; everything below is counted within the chosen store
   const brandCounts = {};
   everything.forEach(o => { if (o.brand) brandCounts[o.brand] = (brandCounts[o.brand] || 0) + 1; });
@@ -1043,6 +1046,13 @@ function viewOrders() {
       <div class="top"><h1>Чакат размер <span class="h-n">(${waiting.length})</span></h1><button class="fbtn" data-act="tab" data-v="stock">Наличности</button></div>
       ${waiting.map(cardHtml).join('')}`;
   }
+  const shoot = activeOrders().filter(atShoot);
+  if (UI.photoList) {
+    if (!shoot.length) UI.photoList = false;
+    else return `<button class="link back" data-act="photo-list" data-v="">← Поръчки</button>
+      <div class="top"><h1>За снимане <span class="h-n">(${shoot.length})</span></h1></div>
+      ${shoot.map(cardHtml).join('')}`;
+  }
   const f = filterData();
   const active = activeFilters().length;
   const searching = UI.searching && UI.q.trim();
@@ -1052,6 +1062,7 @@ function viewOrders() {
     ${UI.searching ? `<div class="search"><input class="field" id="q" type="search" value="${e(UI.q)}" placeholder="Име, телефон, адрес, номер, продукт…" autocomplete="off" enterkeyhint="search"><button class="link" data-act="search-x">Затвори</button></div>` : ''}
     <div id="olist">${searching ? resultsHtml() : `
     ${waiting.length ? `<button class="nosize-btn" data-act="nosize" data-v="1">⚠ Чакат размер (${waiting.length})<span>Виж ›</span></button>` : ''}
+    ${shoot.length ? `<button class="nosize-btn photo" data-act="photo-list" data-v="1">📷 За снимане (${shoot.length})<span>Виж ›</span></button>` : ''}
     ${active ? `<div class="pills on-list">${pills()}<span class="fnow-n">${f.shown.length} от ${f.everything.length}</span></div>` : ''}
     ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`}</div>`;
 }
@@ -2310,7 +2321,8 @@ document.addEventListener('click', async ev => {
       return act(() => api.insert('options', { kind: v, value: val, sort: opts(v).length + 1 }), { config: true });
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
-    case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
+    case 'nosize': UI.noSize = !!v; if (v) UI.photoList = false; render(); return window.scrollTo(0, 0);
+    case 'photo-list': UI.photoList = !!v; if (v) UI.noSize = false; render(); return window.scrollTo(0, 0);
     case 'mat-new': UI.matEdit = { mode: 'item', id: null, name: '', low: '', err: '' }; return renderPop();
     case 'mat-edit': { const m = UI.mat.list.find(x => x.id === id); if (!m) return; UI.matEdit = { mode: 'item', id, name: m.name, low: m.low ? String(m.low) : '', err: '' }; return renderPop(); }
     case 'mat-open': { const vals = {}; if (v === 'count') UI.mat.list.forEach(m => { vals[m.id] = String(m.qty); }); UI.matEdit = { mode: v, vals, err: '' }; return renderPop(); }
