@@ -114,6 +114,7 @@ a{color:var(--ink)}
 .ready.waiting{color:var(--next)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
 .phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
+.viber{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:#7360F2;color:#FFFFFF;font-size:12.5px;font-weight:800;text-decoration:none}
 .phone-row .link{padding:4px 0;font-size:13px}
 .item-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .item-h .link{flex:none;padding:2px 0;font-size:13px}
@@ -295,7 +296,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0758';
+const VERSION = '20261118-0814';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -400,6 +401,16 @@ function themeRow() {
 const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
 const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
 const notesOf = id => D.notes.filter(n => n.order_id === id);
+// international form for Viber: 0888… → +359888…
+function intlPhone(p) {
+  let d = String(p || '').trim().replace(/[^\d+]/g, '');
+  if (d.startsWith('+')) return d;
+  if (d.startsWith('00')) return '+' + d.slice(2);
+  if (d.startsWith('359')) return '+' + d;
+  if (d.startsWith('0')) return '+359' + d.slice(1);
+  return d ? '+' + d : '';
+}
+const viberLink = p => `viber://chat?number=${encodeURIComponent(intlPhone(p))}`;
 function phoneKey(p) {
   let d = String(p || '').replace(/\D/g, '');
   if (d.startsWith('00359')) d = '0' + d.slice(5);
@@ -598,6 +609,7 @@ function bodyHtml(o) {
     ${UI.editPhone === o.id
       ? `<label class="lbl" for="ph-${o.id}">Телефон</label><div class="inline"><input class="field" id="ph-${o.id}" data-field="phone" data-id="${o.id}" type="tel" value="${e(o.phone)}" autocomplete="off"><button class="btn" data-act="phone-done" data-id="${o.id}">Запази</button></div>`
       : `<p class="phone-row">${o.phone ? `Телефон: <a href="tel:${e(o.phone.replace(/[^\d+]/g, ''))}">${e(o.phone)}</a>` : '<span class="muted">Няма телефон</span>'}
+        ${o.phone ? `<a class="viber" href="${e(viberLink(o.phone))}">Отвори във Viber</a>` : ''}
         <button class="link" data-act="phone-edit" data-id="${o.id}">${o.phone ? 'Редактирай' : 'Добави'}</button></p>`}
     ${otherOrders(o).length ? `<div class="prev"><p class="prev-h">★ Други поръчки на клиента</p>${otherOrders(o).map(h => {
       const st = h.waybill_at ? `Изпратена ${e(day(h.waybill_at))}${h.tracking ? ' · ' + e(h.tracking) : ''}` : 'Активна';
