@@ -115,6 +115,8 @@ a{color:var(--ink)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
 .phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
 .viber{display:inline-flex;align-items:center;min-height:30px;padding:0 12px;border-radius:999px;background:#7360F2;color:#FFFFFF;font-size:12.5px;font-weight:800;text-decoration:none}
+.copy{appearance:none;flex:none;min-height:30px;padding:0 12px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);font-size:12.5px;font-weight:800}
+.inline .copy{min-height:44px;border-radius:10px}
 .phone-row .link{padding:4px 0;font-size:13px}
 .item-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
 .item-h .link{flex:none;padding:2px 0;font-size:13px}
@@ -296,7 +298,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0814';
+const VERSION = '20261118-0941';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -411,6 +413,16 @@ function intlPhone(p) {
   return d ? '+' + d : '';
 }
 const viberLink = p => `viber://chat?number=${encodeURIComponent(intlPhone(p))}`;
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch (x) { /* older way below */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+    document.body.append(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand('copy'); ta.remove(); return ok;
+  } catch (x) { return false; }
+}
+const shipName = o => (o.recipient || '').trim() || o.customer || '';
 function phoneKey(p) {
   let d = String(p || '').replace(/\D/g, '');
   if (d.startsWith('00359')) d = '0' + d.slice(5);
@@ -505,7 +517,7 @@ function cardHtml(o) {
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
   else if (allReady) orderRow = nowRow('Писане на товарителница', 'work', 'waybill', o.id, 'Готово') +
-    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([o.customer, o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
+    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && 'НП ' + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
@@ -609,13 +621,15 @@ function bodyHtml(o) {
     ${UI.editPhone === o.id
       ? `<label class="lbl" for="ph-${o.id}">Телефон</label><div class="inline"><input class="field" id="ph-${o.id}" data-field="phone" data-id="${o.id}" type="tel" value="${e(o.phone)}" autocomplete="off"><button class="btn" data-act="phone-done" data-id="${o.id}">Запази</button></div>`
       : `<p class="phone-row">${o.phone ? `Телефон: <a href="tel:${e(o.phone.replace(/[^\d+]/g, ''))}">${e(o.phone)}</a>` : '<span class="muted">Няма телефон</span>'}
-        ${o.phone ? `<a class="viber" href="${e(viberLink(o.phone))}">Отвори във Viber</a>` : ''}
+        ${o.phone ? `<button class="copy" data-act="copy" data-v="${e(o.phone.replace(/[^\d+]/g, ''))}">Копирай</button><a class="viber" href="${e(viberLink(o.phone))}">Отвори във Viber</a>` : ''}
         <button class="link" data-act="phone-edit" data-id="${o.id}">${o.phone ? 'Редактирай' : 'Добави'}</button></p>`}
     ${otherOrders(o).length ? `<div class="prev"><p class="prev-h">★ Други поръчки на клиента</p>${otherOrders(o).map(h => {
       const st = h.waybill_at ? `Изпратена ${e(day(h.waybill_at))}${h.tracking ? ' · ' + e(h.tracking) : ''}` : 'Активна';
       const inner = `<b>#${h.num}</b> · ${e(day(h.created_at))} · ${st}${h.price != null ? ' · ' + e(money(h.price)) : ''}`;
       return findOrder(h.id) ? `<button class="prev-row" data-act="open" data-id="${h.id}">${inner}</button>` : `<p class="prev-row">${inner}</p>`;
     }).join('')}</div>` : ''}
+    <label class="lbl" for="rcp-${o.id}">Име за доставка</label>
+    <div class="inline"><input class="field" id="rcp-${o.id}" data-field="recipient" data-id="${o.id}" value="${e(o.recipient || '')}" autocomplete="off"><button class="copy" data-act="copy" data-v="${e(shipName(o))}">Копирай</button></div>
     <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
     <label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
@@ -808,7 +822,7 @@ function searchPool() {
 }
 const norm = v => String(v == null ? '' : v).toLowerCase();
 function haystack(o) {
-  const parts = [o.num, '#' + o.num, o.customer, o.phone, String(o.phone || '').replace(/\D/g, ''), o.address,
+  const parts = [o.num, '#' + o.num, o.customer, o.recipient, o.phone, String(o.phone || '').replace(/\D/g, ''), o.address,
     o.price != null ? priceInput(o.price) + ' ' + o.price : '', o.brand, o.channel, o.account, o.note, o.problem, o.tracking,
     ...(o.items || []).map(it => [it.name, it.size, it.color, it.note].join(' ')),
     ...notesOf(o.id).map(n => n.body)];
@@ -1346,7 +1360,7 @@ function phoneHint(phone) {
   return `★ Поръчвал е преди: ${list.length} ${list.length === 1 ? 'поръчка' : 'поръчки'}, последна #${last.num} от ${e(day(last.created_at))}${last.customer ? ' (' + e(last.customer) + ')' : ''}`;
 }
 function openForm() {
-  F = { customer: '', phone: '', address: '', price: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
+  F = { customer: '', phone: '', recipient: '', address: '', price: '', brand: '', channel: '', account: '', due: '', urgent: false, note: '', confirm: null, items: [], edit: blankItem(), err: '', busy: false };
   renderForm();
 }
 const typeOf = id => D.types.find(t => t.id === id);
@@ -1397,6 +1411,7 @@ function renderForm() {
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
     <label class="lbl" for="f-phone">Телефон</label><input class="field" id="f-phone" type="tel" value="${e(F.phone)}" autocomplete="off">
     <p class="small phone-hint" id="f-phone-hint">${phoneHint(F.phone)}</p>
+    <label class="lbl" for="f-recipient">Име за доставка</label><input class="field" id="f-recipient" value="${e(F.recipient)}" autocomplete="off">
     <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
     <label class="lbl" for="f-price">Цена (наложен платеж), €</label><input class="field" id="f-price" inputmode="decimal" value="${e(F.price)}" autocomplete="off">
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
@@ -1437,7 +1452,7 @@ async function saveOrder() {
   F.busy = true; F.err = ''; renderForm();
   try {
     await api.createOrder({
-      customer: F.customer.trim(), phone: F.phone.trim(), address: F.address.trim(), price: parsePrice(F.price) == null ? '' : String(parsePrice(F.price)), brand: F.brand, channel: F.channel,
+      customer: F.customer.trim(), phone: F.phone.trim(), recipient: F.recipient.trim(), address: F.address.trim(), price: parsePrice(F.price) == null ? '' : String(parsePrice(F.price)), brand: F.brand, channel: F.channel,
       account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
       note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
       items: F.items.map(it => ({
@@ -1650,6 +1665,11 @@ document.addEventListener('click', async ev => {
       toast('Продуктът е махнат');
       return act(() => api.remove('items', IE.itemId));
     }
+    case 'copy': {
+      if (!v) return;
+      const ok = await copyText(v);
+      return toast(ok ? `Копирано: ${v}` : 'Не успях да копирам. Задръж върху текста и избери „Копирай“.');
+    }
     case 'phone-edit':
       UI.editPhone = id; renderPop();
       return setTimeout(() => { const f = $(`#ph-${id}`); if (f) { f.focus(); f.setSelectionRange(f.value.length, f.value.length); } }, 30);
@@ -1809,7 +1829,7 @@ document.addEventListener('input', ev => {
     if (k) { UI.task.draft[k] = t.value; return; }
   }
   if (!F) return;
-  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-address': 'address', 'f-price': 'price', 'f-note': 'note', 'f-due': 'due' };
+  const map = { 'f-customer': 'customer', 'f-phone': 'phone', 'f-recipient': 'recipient', 'f-address': 'address', 'f-price': 'price', 'f-note': 'note', 'f-due': 'due' };
   if (map[t.id]) F[map[t.id]] = t.value;
   if (t.id === 'f-phone') { const h = $('#f-phone-hint'); if (h) h.innerHTML = phoneHint(t.value); }
   else if (t.id === 'f-name') F.edit.name = t.value;
