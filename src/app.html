@@ -603,7 +603,7 @@ function cardHtml(o) {
     o.paid || o.paid_manual ? '<span class="badge paid">Платена</span>' : '',
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
-    o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
+    o.photo_req && !o.packed_at && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
     ...sizeWaitItems(o).map(it => `<span class="badge nosize">⚠ Няма размер ${e([it.size, it.color].filter(Boolean).join(' '))}</span>`),
     o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : '',
     notesOf(o.id).length ? `<span class="badge">Бележки: ${notesOf(o.id).length}</span>` : ''
@@ -716,8 +716,8 @@ function bodyHtml(o) {
     const st = stagesOf(it);
     const next = st.find(s => !s.done_at);
     const steps = st.map(s => stepBtn('stage', s.id, s.name, s.done_at, s.done_by, `${s.kind === 'wait' ? 'wait' : ''} ${next && next.id === s.id && !it.photo_at ? 'cur' : ''}`)).join('');
-    const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
-      <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
+    const photo = it.photo_at ? `<button class="step photo on" data-act="photo" data-id="${it.id}" aria-pressed="true">
+      <b>Върната от снимане</b><small>на снимане от ${e(day(it.photo_at))}</small></button>` : '';
     if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
     return `<div class="item"><div class="item-h"><h3>${itemLabelHtml(it)}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
       ${it.price != null ? `<p class="iprice">${e(money(lineSum(it)))}</p>` : ''}
@@ -767,7 +767,7 @@ function bodyHtml(o) {
     <div class="notes">${notesOf(o.id).map(n => `<div class="note">${n.author === me.id || isAdmin() ? `<button class="note-x${UI.armed === 'note:' + n.id ? ' armed' : ''}" data-act="note-del" data-id="${n.id}" aria-label="Изтрий бележката">${UI.armed === 'note:' + n.id ? 'Изтрий' : '✕'}</button>` : ''}<b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
     <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
     <div class="actions">
-      ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
+      ${o.packed_at || o.waybill_at || (!o.photo_req && itemsOf(o).some(it => it.photo_at)) ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
       <button class="btn ghost" data-act="more" data-id="${o.id}">Още</button>
     </div>
     <p class="small muted" style="margin-top:10px">Въведена от ${e(nameOf(o.created_by) || '—')} на ${e(day(o.created_at))}</p>
@@ -2265,7 +2265,21 @@ document.addEventListener('click', async ev => {
       if (p.at && !undo) toast('Поръчката е изпратена', 'waybill', id);
       return act(() => api.update('orders', id, patch));
     }
-    case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
+    case 'photo-req': {
+      const o = findOrder(id);
+      if (!o) return;
+      if (o.photo_req) { toast('Заявката за снимане е махната'); return act(() => api.update('orders', id, { photo_req: false })); }
+      if (o.packed_at || o.waybill_at) return;   // a packed order can no longer be called for photos
+      // everything is already made: it goes to the photo shoot right away
+      const items = itemsOf(o), go = items.filter(i => !i.photo_at);
+      if (go.length && items.every(i => stagesOf(i).every(x => x.done_at))) {
+        const now = new Date().toISOString();
+        toast('Готова е · изпратена за снимане');
+        return act(() => Promise.all(go.map(i => api.update('items', i.id, { photo_at: now, photo_by: me.id }))));
+      }
+      toast('Заявена за снимане · ще се изпрати, щом е готова');
+      return act(() => api.update('orders', id, { photo_req: true }));
+    }
     case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
     case 'paid':
       if (v == null) return askBox(`<h2>Платена</h2>

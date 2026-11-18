@@ -87,6 +87,7 @@ This file continues the work from an earlier chat with Claude. Read it together 
     - "Склад" became a tab of the bottom menu with Наличности, Returns and Материали; the three buttons left the Profile.
     - In the order window "Платена" moved next to the sum; at the bottom only "Заяви за снимане" and "Още" stay ("+ Задача", "Отбележи като спешна" and "Изтрий поръчката" are inside "Още").
     - Not done, his call for later: "Моите / Всички" on the orders list (each person picks their stages once in the Profile and the list opens on their own work).
+22. **18.11, one way to the photo shoot** (version 20261118-2135). The yellow "Изпрати за снимане" button on each product is gone (it sat next to the stages and looked like one). Only "Заяви за снимане" stays, and only while the order is not packed. A request on an order that is already made sends it right away. "Върната от снимане" still shows while a product is at the shoot.
 
 ## Still to do (in the owner's order)
 

@@ -80,8 +80,11 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - Colours black and white for now. T-shirt variants are grouped in the filters.
 - **Confirmation:** `needs_confirm`, then the customer is called. Until then the order counts as waiting for the customer.
 - **Photo shoot:**
-  - "На снимане": `items.photo_at` can be set at any stage. "Върната" continues from where it stopped.
-  - "Заяви за снимане" (`orders.photo_req`) is not a stage. Marketing flags an order. When the last production stage is finished, the person who finished it sees a big "Предай за снимане" notice. All items get `photo_at` automatically, and `photo_req` is cleared.
+  - "Заяви за снимане" (`orders.photo_req`) is the only way to the photo shoot (the manual "Изпрати за снимане" button on each product was removed on 18.11.2026: the owner wants one way). It is not a stage. Marketing flags an order.
+    - When the last production stage is finished, the person who finished it sees a big "Предай за снимане" notice. All items get `photo_at` automatically, and `photo_req` is cleared.
+    - If the order is already made when it is requested, it goes to the photo shoot right away (toast "Готова е · изпратена за снимане").
+    - Only while the order is not packed: a packed order cannot be called for photos (button and badge are hidden; an old request comes back if the order is unpacked). The button is also hidden while the order is at the shoot.
+  - "На снимане" = `items.photo_at`. The yellow dashed "Върната от снимане" button in the order (shown only while the product is at the shoot) and "Върната" on the card bring it back; it continues from where it stopped.
 - **Склад** is a tab of the bottom menu (Поръчки · За правене · Готови · Склад · Профил). Three parts, switched by chips at the top: Наличности, Returns (n), Материали. The menu remembers the last part (`UI.store`); the chips use the `store` action, which switches without scrolling.
 - **Stock (Наличности)**, Склад → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
   - Blanks per product type × size × colour (all t-shirt types and hoodies; Slash and Meivi oversize are different blanks). Started at 0; the team loads what they have.
