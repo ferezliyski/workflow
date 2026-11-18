@@ -82,7 +82,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .qp{display:flex;align-items:flex-start;gap:18px}
 .qp-p{flex:1;min-width:0}
 .qp-p .field{min-height:46px}
-.dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;margin-bottom:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
+.dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;margin-top:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
 .dlist:empty{display:none}
 .dcat{padding:9px 12px 3px;font-size:12px;font-weight:700;color:var(--soft)}
 .dopt{display:block;width:100%;padding:9px 12px;border:0;background:none;color:var(--ink);font-size:14.5px;font-weight:600;text-align:left}
@@ -501,18 +501,11 @@ const designList = (pre, typeId, q) => {
 };
 const designPick = (pre, d) => {
   const has = designsOf(d.typeId).length, q = d.dq != null ? d.dq : d.design;
-  const list = has && !d.custom ? `<label class="lbl" for="${pre}-dq">Дизайн</label><div class="dlist" id="${pre}-dl"></div><input class="field" id="${pre}-dq" value="${e(q)}" autocomplete="off" autocapitalize="off" spellcheck="false">` : '';
+  const list = has && !d.custom ? `<label class="lbl" for="${pre}-dq">Дизайн</label><input class="field" id="${pre}-dq" value="${e(q)}" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="dlist" id="${pre}-dl"></div>` : '';
   return list + `<label class="check"><input type="checkbox" id="${pre}-custom" ${d.custom ? 'checked' : ''}>Персонален дизайн</label>`
     + (d.custom ? `<input class="field" id="${pre}-dname" style="margin-top:8px" value="${e(d.design)}" autocomplete="off" aria-label="Име на дизайна">` : ''); };
-// The list opens ABOVE the field, so the phone keyboard can never cover it. When it grows or shrinks, the form is
-// moved by exactly the same amount, so the field itself stays where the finger is and nothing else scrolls.
-function setDList(pre, html) {
-  const box = $('#' + pre + '-dl'); if (!box) return;
-  let sc = box.parentElement;
-  while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
-  const inp = $('#' + pre + '-dq') || box, y0 = inp.getBoundingClientRect().top; box.innerHTML = html;
-  if (sc && sc !== document.body && sc !== document.documentElement) sc.scrollTop += inp.getBoundingClientRect().top - y0;
-}
+// The list opens under the field. The screen is never moved by the app here (the owner's choice).
+function setDList(pre, html) { const box = $('#' + pre + '-dl'); if (box) box.innerHTML = html; }
 const designDraft = pre => pre === 'f' ? (F && F.edit) : (UI.itemEdit && UI.itemEdit.draft);
 function designTyped(t) {
   const pre = t.id.split('-')[0], d = designDraft(pre); if (!d) return;
