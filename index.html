@@ -302,7 +302,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0953';
+const VERSION = '20261118-0958';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -416,6 +416,16 @@ function intlPhone(p) {
   if (d.startsWith('0')) return '+359' + d.slice(1);
   return d ? '+' + d : '';
 }
+// opens viber:// without leaving the app: on a computer through a hidden frame (the page stays), on a phone directly
+const isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Mac/.test(navigator.platform));
+function openExternal(url) {
+  window.__lastViber = url;
+  if (isPhone) { window.location.href = url; return; }
+  let fr = document.getElementById('ext-frame');
+  if (!fr) { fr = document.createElement('iframe'); fr.id = 'ext-frame'; fr.style.display = 'none'; document.body.appendChild(fr); }
+  fr.src = 'about:blank'; setTimeout(() => { fr.src = url; }, 0);
+}
+document.addEventListener('click', ev => { const a = ev.target.closest && ev.target.closest('a.viber'); if (a && !isPhone) { ev.preventDefault(); openExternal(a.getAttribute('href')); } }, true);
 const viberLink = p => `viber://chat?number=${encodeURIComponent(intlPhone(p))}`;
 async function copyText(text) {
   try { await navigator.clipboard.writeText(text); return true; } catch (x) { /* older way below */ }
@@ -1778,8 +1788,7 @@ document.addEventListener('click', async ev => {
       if (o.phone) {
         const msg = `Здравейте, това е номера на Вашата пратка ${tracking}. Скоро ще бъде при вас.\nБлагодарим ви!`;
         const url = `viber://chat?number=${encodeURIComponent(intlPhone(o.phone))}&draft=${encodeURIComponent(msg)}`;
-        window.__lastViber = url;
-        window.location.href = url;
+        openExternal(url);
       }
       UI.open = null;
       toast(o.phone ? 'Завършена · отварям Viber' : 'Завършена');
