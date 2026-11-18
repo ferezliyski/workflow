@@ -101,6 +101,8 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .notice .ico{font-size:44px;line-height:1}
 .notice h2{font-size:24px;margin:10px 0 6px}
 .notice p{margin:0 0 18px;color:var(--soft)}
+td.miss{background:#f6c445;color:#1b1b1b;border-radius:6px;white-space:nowrap}
+.miss-note{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#fdf1cc;color:#3a2c00;font-weight:700;font-size:13px}
 .card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
 .nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
 .nosize-btn span{color:var(--soft);font-weight:600;font-size:13px}
@@ -313,7 +315,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1043';
+const VERSION = '20261118-1050';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -923,11 +925,14 @@ function viewSummary() {
     const colors = [...new Set([...type.colors, ...mine.map(t => t.color)])].filter(c => mine.some(t => t.color === c));
     const total = mine.reduce((a, t) => a + t.qty, 0);
     const rows = colors.map(c => `<tr><td>${e(c || '—')}</td>${sizes.map(sz => {
-      const n = mine.filter(t => t.color === c && t.size === sz).reduce((a, t) => a + t.qty, 0);
-      return `<td class="${n ? 'v' : 'z'}">${n || '·'}</td>`;
+      const here = mine.filter(t => t.color === c && t.size === sz), n = here.reduce((a, t) => a + t.qty, 0);
+      return n && here.some(missingFor) ? `<td class="v miss" title="Липсва">⚠${n}</td>` : `<td class="${n ? 'v' : 'z'}">${n || '·'}</td>`;
     }).join('')}</tr>`).join('');
+    const lack = mine.filter(missingFor), lackN = lack.reduce((a, t) => a + t.qty, 0);
+    const lackTxt = [...new Set(lack.map(t => [t.size, t.color].filter(Boolean).join(' ')))].join(', ');
     return `<section class="block"><h2><span>${e(m)}</span><span>${total} бр.</span></h2>
-      <div class="tbl-wrap"><table><thead><tr><th>Цвят</th>${sizes.map(s => `<th>${e(s)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      <div class="tbl-wrap"><table><thead><tr><th>Цвят</th>${sizes.map(s => `<th>${e(s)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+      ${lackN ? `<p class="miss-note">⚠ Липсват ${lackN} бр.: ${e(lackTxt)}</p>` : ''}</section>`;
   }).join('');
   const otherHtml = Object.keys(other).map(n => `<section class="block"><h2><span>${e(n)}</span></h2>
     ${Object.keys(other[n]).map(l => `<div class="kv"><span>${e(l)}</span><b>${other[n][l]} бр.</b></div>`).join('')}</section>`).join('');
