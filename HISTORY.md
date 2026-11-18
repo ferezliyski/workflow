@@ -83,6 +83,10 @@ This file continues the work from an earlier chat with Claude. Read it together 
 18. **18.11, later:** Slash sync live; stock (Наличности), Returns and Материали tabs (see CLAUDE.md → Business rules).
 19. **18.11, "Платена" button** in the order (version 20261118-2043): a centred window asks "Само поръчката" or "Поръчката и доставката" (or "Откажи"); cash on delivery then shows 0 € with that text.
 20. **18.11, notes:** small ✕ next to each note deletes it (version 20261118-2046).
+21. **18.11, tidy-up after the owner asked how to make the app more intuitive** (version 20261118-2117). He saw three pictures and chose two:
+    - "Склад" became a tab of the bottom menu with Наличности, Returns and Материали; the three buttons left the Profile.
+    - In the order window "Платена" moved next to the sum; at the bottom only "Заяви за снимане" and "Още" stay ("+ Задача", "Отбележи като спешна" and "Изтрий поръчката" are inside "Още").
+    - Not done, his call for later: "Моите / Всички" on the orders list (each person picks their stages once in the Profile and the list opens on their own work).
 
 ## Still to do (in the owner's order)
 

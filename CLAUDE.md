@@ -57,6 +57,8 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - `redraw()` waits while the user is typing in an input, except the search box.
 - The tracking field is saved quietly, without a redraw. Otherwise the tap on "Изпрати" right after it gets lost.
 - **Popups:** the body is pinned with `position:fixed` while a popup is open; iPhone otherwise scrolls the list behind it. The scroll position is kept on every re-render. No sideways wobble: overflow-x and touch-action rules.
+- **Small choice windows** ("Платена", "Още"): `askBox(html)` / `closeAsk()` put `#ask` on the body, outside `#app` and `#pop`, so re-renders do not touch it. A tap on a choice closes it; a tap on the dimmed background closes it; a tap inside the box does nothing.
+- **Bottom menu:** five tabs sized by their text (`flex:1 1 auto`, no wrap); they must fit on one line from 320 px up, also with the task badge on "Профил".
 - Theme: `localStorage['wf-theme']` → `data-theme` on the root element. Use CSS vars `--bg --surface --ink --soft --line`. There is **no `--card` and no `--muted`**.
 
 ## Business rules
@@ -80,16 +82,17 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - **Photo shoot:**
   - "На снимане": `items.photo_at` can be set at any stage. "Върната" continues from where it stopped.
   - "Заяви за снимане" (`orders.photo_req`) is not a stage. Marketing flags an order. When the last production stage is finished, the person who finished it sees a big "Предай за снимане" notice. All items get `photo_at` automatically, and `photo_req` is cleared.
-- **Stock (Наличности)**, Profile → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
+- **Склад** is a tab of the bottom menu (Поръчки · За правене · Готови · Склад · Профил). Three parts, switched by chips at the top: Наличности, Returns (n), Материали. The menu remembers the last part (`UI.store`); the chips use the `store` action, which switches without scrolling.
+- **Stock (Наличности)**, Склад → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
   - Blanks per product type × size × colour (all t-shirt types and hoodies; Slash and Meivi oversize are different blanks). Started at 0; the team loads what they have.
   - "Зареждане" adds a grid of numbers; "Брак" takes out one size/colour; the small "Инвентаризация" button in each table's corner opens all cells of that model with the current numbers, and saving stores only the differences; the last loads/scraps can be taken back ("Махни").
   - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Щамповане" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red.
   - Doing "Щамповане" takes the blank off the shelf ("Печат" is DTF film, not on the shirt); undoing it puts it back.
   - Missing sizes are automatic: oldest orders get the blanks first; an order whose not-yet-pressed t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Every type is counted from 0, so before the first load all t-shirt orders wait (owner's choice).
-- **Returns** (Profile → "Returns"): made t-shirts that came back (not collected, or swapped). "Добави" picks model, design (same searchable list, or a personal design), size, colour and count.
+- **Returns** (Склад → "Returns"): made t-shirts that came back (not collected, or swapped). "Добави" picks model, design (same searchable list, or a personal design), size, colour and count.
   - An open order whose not-yet-pressed t-shirt matches a free return (same model, design, size, colour; oldest order first) shows "↩ Има в Returns" on its card, needs no blank and never waits for a size.
   - In the order, "↩ Вземи от Returns" links the return to the item and marks all its stages done (no blank is taken). "Върни" undoes it.
-- **Материали** (Profile): packaging stock with no rules. "+ Материал" (name, warning threshold); "Зареждане" adds, "Инвентаризация" sets the counted numbers (stores the difference); yellow under the threshold, red at 0 or below. Not shown in the orders. Automatic use per order was discussed and dropped (rules are not fixed).
+- **Материали** (Склад → "Материали"): packaging stock with no rules. "+ Материал" (name, warning threshold); "Зареждане" adds, "Инвентаризация" sets the counted numbers (stores the difference); yellow under the threshold, red at 0 or below. Not shown in the orders. Automatic use per order was discussed and dropped (rules are not fixed).
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
   2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):
@@ -107,7 +110,8 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - copy buttons for name, address and phone;
   - Viber button next to the phone number;
   - price per product (typed by hand, per piece); cash on delivery = the sum, without delivery;
-  - "Платена" button in the order: a centred window asks "Само поръчката" / "Поръчката и доставката" (`orders.paid_manual`); cash on delivery then shows 0 € with that text; "Върни" undoes it;
+  - "Платена": a small button next to the cash-on-delivery sum (next to the price field on orders with one hand-typed total). A centred window asks "Само поръчката" / "Поръчката и доставката" (`orders.paid_manual`); cash on delivery then shows 0 € with that text; "Върни" undoes it. The card badge "Платена" is green.
+  - Bottom of the order window: "📷 Заяви за снимане" and "Още". "Още" opens a centred window with "+ Задача", "Отбележи като спешна", "Изтрий поръчката" (two taps) and "Затвори".
   - design (ready print) per t-shirt, picked from the catalogue loaded from the store (`designs`).
 - **Profile:**
   - Personal tasks: admin sees and assigns everyone's; a member sees only their own and can only tick the admin's tasks.
@@ -122,6 +126,7 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - White, black and red style; mid-strength colours, not harsh and not washed out. Menu at the bottom, taller bar. Smaller fonts and buttons, with clear separation between order cards.
 - Next step: thin green outline. Photo: yellow dashed.
 - **Nothing may jump:** no scroll-to-top when picking an option, and no horizontal movement.
+- A choice or a small menu opens as a **window in the middle of the screen** over a dimmed background, not as buttons that appear in the page ("за да не ги пропуснеш").
 - Show counts in headers, e.g. "Поръчки (12)".
 - Check every visual change with a 390×844 screenshot before publishing.
 

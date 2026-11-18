@@ -110,6 +110,7 @@ table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .cod{font-weight:800;font-size:16px}
 .cod:empty{display:none}
 .cod .paidtxt{font-weight:600;font-size:13px;color:var(--soft)}
+.cod-row{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #f-total{margin-top:12px}
 .iprice{font-size:13.5px;font-weight:700}
 .btn:disabled{opacity:.5}
@@ -315,8 +316,9 @@ td.v{font-weight:800}
 /* bottom bar */
 .bar{position:fixed;left:0;right:0;bottom:0;z-index:5;display:flex;justify-content:center;background:var(--surface);border-top:1.5px solid var(--line);padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 12px)}
 .bar-in{display:flex;width:100%;max-width:640px}
-.tab{appearance:none;flex:1;min-height:60px;padding:8px 2px;background:none;border:0;border-top:3px solid transparent;font-size:14px;font-weight:700;color:var(--soft)}
+.tab{appearance:none;flex:1 1 auto;white-space:nowrap;min-height:60px;padding:8px 2px;background:none;border:0;border-top:3px solid transparent;font-size:14px;font-weight:700;color:var(--soft)}
 .tab[aria-current="page"]{color:var(--ink);border-top-color:var(--accent)}
+@media (max-width:350px){.tab{font-size:12.5px;padding:8px 0}}
 .fab{position:fixed;right:16px;bottom:calc(90px + env(safe-area-inset-bottom, 0px));transition:transform .15s;z-index:6;min-height:50px;padding:0 18px;border:0;border-radius:999px;background:var(--accent);color:var(--on-accent);font-weight:800;font-size:14.5px;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 
 /* new order sheet */
@@ -446,7 +448,9 @@ const api = window.__mockApi || realApi();
 /* ---------- state ---------- */
 let me = null;
 let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [], stock: [], returns: [] };
-const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
+const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, store: 'stock', authMode: 'in', authErr: '', busy: false };
+// "Склад" in the bottom menu: blanks, returned t-shirts and packaging
+const STORE_TABS = ['stock', 'returns', 'materials', 'missing'];
 let F = null; // new-order form
 
 const $ = s => document.querySelector(s);
@@ -725,7 +729,7 @@ function bodyHtml(o) {
   }).join('') + (UI.itemEdit && UI.itemEdit.orderId === o.id && !UI.itemEdit.itemId
     ? `<div class="item">${itemEditorHtml(o)}</div>`
     : (o.waybill_at ? '' : `<button class="btn ghost" data-act="ie-open" data-order="${o.id}" style="margin-top:12px">+ Добави продукт</button>`));
-  const armed = UI.armed === o.id;
+  const payBtn = o.paid || o.paid_manual ? '' : `<button class="copy" data-act="paid" data-id="${o.id}">Платена</button>`;
   return `<div class="card-body">
     ${UI.editPhone === o.id
       ? `<label class="lbl" for="ph-${o.id}">Телефон</label><div class="inline"><input class="field" id="ph-${o.id}" data-field="phone" data-id="${o.id}" type="tel" value="${e(o.phone)}" autocomplete="off"><button class="btn" data-act="phone-done" data-id="${o.id}">Запази</button></div>`
@@ -744,9 +748,9 @@ function bodyHtml(o) {
     ${o.paid_manual
       ? `<span class="lbl">Наложен платеж</span><p class="cod">${e(money(0))} <span class="paidtxt">${e(PAID_TXT[o.paid_manual])}</span> <button class="link" data-act="paid" data-v="" data-id="${o.id}">Върни</button></p>`
       : itemsOf(o).some(it => it.price != null)
-      ? `<span class="lbl">${o.paid ? 'Платена с карта' : 'Наложен платеж'}</span><p class="cod">${e(money(o.price))}</p>`
+      ? `<span class="lbl">${o.paid ? 'Платена с карта' : 'Наложен платеж'}</span><div class="cod-row"><p class="cod">${e(money(o.price))}</p>${payBtn}</div>`
       : `<label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
-    <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">`}
+    <div class="inline"><input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">${payBtn}</div>`}
     ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
     ${o.needs_confirm ? `<div class="steps" style="margin-top:12px">${stepBtn('confirm', o.id, 'Клиентът потвърди по телефона', o.confirmed_at, o.confirmed_by, 'wait')}</div>` : ''}
     ${items}
@@ -763,11 +767,8 @@ function bodyHtml(o) {
     <div class="notes">${notesOf(o.id).map(n => `<div class="note">${n.author === me.id || isAdmin() ? `<button class="note-x${UI.armed === 'note:' + n.id ? ' armed' : ''}" data-act="note-del" data-id="${n.id}" aria-label="Изтрий бележката">${UI.armed === 'note:' + n.id ? 'Изтрий' : '✕'}</button>` : ''}<b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
     <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
     <div class="actions">
-      <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
       ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
-      ${o.paid || o.paid_manual ? '' : `<button class="btn ghost" data-act="paid" data-id="${o.id}">Платена</button>`}
-      <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
-      <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
+      <button class="btn ghost" data-act="more" data-id="${o.id}">Още</button>
     </div>
     <p class="small muted" style="margin-top:10px">Въведена от ${e(nameOf(o.created_by) || '—')} на ${e(day(o.created_at))}</p>
   </div>`;
@@ -1100,6 +1101,11 @@ function viewDone() {
       : `${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`}`;
 }
 
+function storeHead(mode, right) {
+  const chip = (v, l) => `<button class="chip" data-act="store" data-v="${v}" aria-pressed="${mode === v}">${l}</button>`;
+  return `<div class="top" style="min-height:34px"><h1>Склад</h1>${right || ''}</div>
+    <div class="seg">${chip('stock', 'Наличности')}${chip('returns', `Returns (${(D.returns || []).filter(r => !r.used_at).length})`)}${chip('materials', 'Материали')}</div>`;
+}
 function viewStock() {
   const tees = D.types.filter(t => t.is_tshirt);
   const ordered = {};
@@ -1119,8 +1125,7 @@ function viewStock() {
   const moves = M && M.rows ? M.rows.map(m => { const t = D.types.find(x => x.id === m.product_type_id);
     return `<div class="miss-row"><span><b>${m.delta > 0 ? '+' : ''}${m.delta} · ${e(t ? t.name : '?')} · ${e(m.size)} · ${e(m.color)}</b><br><span class="small muted">${m.kind === 'load' ? 'Заредено' : m.kind === 'count' ? 'Инвентаризация' : 'Брак'} · ${e(nameOf(m.created_by) || '')} · ${e(day(m.created_at))}</span></span>
       <button class="link" data-act="stock-undo" data-id="${m.id}">${UI.armed === 'mv:' + m.id ? 'Натисни пак' : 'Махни'}</button></div>`; }).join('') : '';
-  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
-    <div class="top"><h1>Наличности</h1></div>
+  return `${storeHead('stock')}
     <div class="actions" style="margin:0 0 14px"><button class="btn" data-act="stock-open" data-v="load" style="flex:1">Зареждане</button><button class="btn ghost" data-act="stock-open" data-v="scrap" style="flex:1">Брак</button></div>
     ${blocks}
     ${moves ? `<section class="block"><h2><span>Последни зареждания и брак</span></h2>${moves}</section>` : ''}`;
@@ -1132,8 +1137,7 @@ function viewReturns() {
   const label = r => { const t = D.types.find(x => x.id === r.product_type_id); return itemLabelHtml({ design: r.design, name: t ? t.name : '?', qty: 1, size: r.size, color: r.color }); };
   const used = (D.returns || []).filter(r => r.used_at).sort((a, b) => a.used_at < b.used_at ? 1 : -1).slice(0, 10);
   const orderOfItem = id => D.orders.find(x => itemsOf(x).some(i => i.id === id));
-  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
-    <div class="top"><h1>Returns <span class="h-n">(${free.length})</span></h1></div>
+  return `${storeHead('returns')}
     <button class="btn wide" data-act="ret-open" style="margin-bottom:14px">Добави</button>
     ${free.length ? `<section class="block">${free.map(r => { const o = forOrder[r.id];
       return `<div class="miss-row"><span><b>${label(r)}</b><br><span class="small muted">${e(nameOf(r.created_by) || '')} · ${e(day(r.created_at))}</span>${o ? `<br><span class="ret">↩ За поръчка #${o.num} ${e(o.customer || '')}</span>` : ''}</span>
@@ -1144,14 +1148,13 @@ function viewReturns() {
 }
 function viewMaterials() {
   const M = UI.mat;
-  if (!M || !M.list) return `<button class="link back" data-act="tab" data-v="profile">← Профил</button><div class="top"><h1>Материали</h1></div><p class="empty">${M && M.err ? e(M.err) : 'Зареждам…'}</p>`;
+  if (!M || !M.list) return `${storeHead('materials')}<p class="empty">${M && M.err ? e(M.err) : 'Зареждам…'}</p>`;
   const nameOfMat = id => { const m = M.list.find(x => x.id === id); return m ? m.name : '?'; };
   const rows = M.list.map(m => `<button class="mat-row" data-act="mat-edit" data-id="${m.id}"><span><b>${e(m.name)}</b>${m.low ? `<br><span class="small muted">предупреждение под ${m.low}</span>` : ''}</span>
     <b class="mat-q ${m.qty <= 0 ? 'neg' : m.qty < m.low ? 'low' : ''}">${m.qty}</b></button>`).join('');
   const moves = M.moves.map(x => `<div class="miss-row"><span><b>${x.delta > 0 ? '+' : ''}${x.delta} · ${e(nameOfMat(x.material_id))}</b><br><span class="small muted">${x.kind === 'load' ? 'Заредено' : 'Инвентаризация'} · ${e(nameOf(x.created_by) || '')} · ${e(day(x.created_at))}</span></span>
     <button class="link" data-act="mat-undo" data-id="${x.id}">${UI.armed === 'mm:' + x.id ? 'Натисни пак' : 'Махни'}</button></div>`).join('');
-  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
-    <div class="top"><h1>Материали <span class="h-n">(${M.list.length})</span></h1><button class="fbtn" data-act="mat-new">+ Материал</button></div>
+  return `${storeHead('materials', '<button class="fbtn" data-act="mat-new">+ Материал</button>')}
     ${M.list.length ? `<div class="actions" style="margin:0 0 14px"><button class="btn" data-act="mat-open" data-v="load" style="flex:1">Зареждане</button><button class="btn ghost" data-act="mat-open" data-v="count" style="flex:1">Инвентаризация</button></div>
       <section class="block">${rows}</section>` : '<p class="empty">Още няма материали.</p>'}
     ${moves ? `<section class="block"><h2><span>Последни зареждания и инвентаризации</span></h2>${moves}</section>` : ''}`;
@@ -1678,7 +1681,7 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button><button class="btn dark wide" data-act="tab" data-v="returns" style="margin-top:8px">Returns${(D.returns || []).some(r => !r.used_at) ? ` (${D.returns.filter(r => !r.used_at).length})` : ''}</button><button class="btn dark wide" data-act="tab" data-v="materials" style="margin-top:8px">Материали</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const settingsBtn = `${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1768,9 +1771,9 @@ function render() {
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
   const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, returns: viewReturns, materials: viewMaterials, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock', 'returns', 'materials'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const tab = (v, l, on) => `<button class="tab" data-act="tab" data-v="${v}" ${on ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
-  app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
+  app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки', UI.tab === 'orders')}${tab('summary', 'За правене', UI.tab === 'summary')}${tab('done', 'Готови', UI.tab === 'done')}${tab(UI.store, 'Склад', STORE_TABS.includes(UI.tab))}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`, ['profile', 'settings', 'stats', 'work', 'leave'].includes(UI.tab))}</div></nav>
     <main class="wrap">${view}</main>
     ${['orders', 'summary', 'done'].includes(UI.tab) ? '<button class="fab" data-act="new">+ Нова поръчка</button>' : ''}`;
   renderPop();
@@ -2007,6 +2010,23 @@ function toast(text, undoAct, id) {
   $('#toast').innerHTML = `<div class="toast" role="status"><span>${e(text)}</span>${undoAct ? `<button data-act="${undoAct}" data-id="${id}" data-undo="1">Отмени</button>` : ''}</div>`;
   toastTimer = setTimeout(() => { $('#toast').innerHTML = ''; }, 6000);
 }
+// a small window in the middle of the screen with a few choices, over whatever is open
+function closeAsk() { const ov = document.getElementById('ask'); if (ov) ov.remove(); }
+function askBox(html) {
+  closeAsk();
+  const ov = document.createElement('div'); ov.id = 'ask'; ov.className = 'notice-ov'; ov.dataset.act = 'ask-x';
+  ov.innerHTML = `<div class="ask-box" role="dialog" aria-modal="true">${html}</div>`;
+  document.body.appendChild(ov);
+}
+// "Още" in the order: the rarely used actions
+function moreBox(id) {
+  const o = findOrder(id);
+  if (!o) return closeAsk();
+  askBox(`<button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
+    <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
+    <button class="btn danger" data-act="delete" data-id="${o.id}">${UI.armed === o.id ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
+    <button class="btn dark" data-act="ask-x" data-x="1">Затвори</button>`);
+}
 function showNotice(icon, title, text) {
   const old = document.getElementById('notice'); if (old) old.remove();
   const d = document.createElement('div'); d.id = 'notice'; d.className = 'notice-ov';
@@ -2048,18 +2068,20 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
+  if (a !== 'ask-x' && a !== 'delete' && b.closest('#ask')) closeAsk();   // a choice in the small window closes it
   if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del' && a !== 'note-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; UI.retEdit = null; UI.matEdit = null; if (v === 'materials') setTimeout(loadMaterials, 0); if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; UI.retEdit = null; UI.matEdit = null; if (v === 'materials') setTimeout(loadMaterials, 0); if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (STORE_TABS.includes(v)) UI.store = v === 'missing' ? 'stock' : v; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; return render();
     case 'prod': UI.prod = v; UI.sub = 'all'; UI.prodOpen = false; return render();
     case 'sub': UI.sub = v; UI.filter = 'all'; return render();
     case 'done-mode': UI.doneMode = v; return render();
+    case 'store': UI.stockEdit = null; UI.retEdit = null; UI.matEdit = null; UI.store = v; UI.tab = v; if (v === 'materials') setTimeout(loadMaterials, 0); if (v === 'stock') setTimeout(loadStockMoves, 0); return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
     case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.retEdit) { UI.retEdit = null; return renderPop(); } if (UI.matEdit) { UI.matEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
@@ -2246,21 +2268,17 @@ document.addEventListener('click', async ev => {
     case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
     case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
     case 'paid':
-      if (v == null) {
-        const ov = document.createElement('div'); ov.id = 'pay-ask'; ov.className = 'notice-ov'; ov.dataset.act = 'paid-x';
-        ov.innerHTML = `<div class="ask-box"><h2>Платена</h2>
-          <button class="btn" data-act="paid" data-v="order" data-id="${id}">Само поръчката</button>
-          <button class="btn" data-act="paid" data-v="all" data-id="${id}">Поръчката и доставката</button>
-          <button class="btn ghost" data-act="paid-x">Откажи</button></div>`;
-        return document.body.appendChild(ov);
-      }
-      { const ov = document.getElementById('pay-ask'); if (ov) ov.remove(); }
+      if (v == null) return askBox(`<h2>Платена</h2>
+        <button class="btn" data-act="paid" data-v="order" data-id="${id}">Само поръчката</button>
+        <button class="btn" data-act="paid" data-v="all" data-id="${id}">Поръчката и доставката</button>
+        <button class="btn ghost" data-act="ask-x" data-x="1">Откажи</button>`);
       return act(() => api.update('orders', id, { paid_manual: v || null }));
-    case 'paid-x': { const ov = document.getElementById('pay-ask'); if (ov) ov.remove(); return; }
-    case 'urgent': return act(() => api.update('orders', id, { urgent: !findOrder(id).urgent }));
+    case 'ask-x': if (!b.dataset.x && ev.target !== b) return; return closeAsk();
+    case 'more': return moreBox(id);
+    case 'urgent': { const o = findOrder(id); if (!o) return; toast(o.urgent ? 'Вече не е спешна' : 'Отбелязана като спешна'); return act(() => api.update('orders', id, { urgent: !o.urgent })); }
     case 'delete':
-      if (UI.armed !== id) { UI.armed = id; return render(); }
-      UI.armed = null; UI.open = null;
+      if (UI.armed !== id) { UI.armed = id; return moreBox(id); }
+      UI.armed = null; UI.open = null; closeAsk();
       return act(() => api.remove('orders', id), { dropOrder: id });
     case 'opt-add': {
       const val = $(`#new-${v}`).value.trim();

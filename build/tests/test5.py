@@ -19,7 +19,7 @@ with sync_playwright() as p:
     page.fill('#pop textarea[id^=nt-]', 'Клиентът иска L вместо S'); page.click('[data-act=note-add]'); page.wait_for_timeout(300)
     print('notes in popup:', page.locator('.note').all_inner_texts())
     # task from the order
-    page.click('[data-act=task-new][data-order]'); page.wait_for_timeout(150)
+    page.click('[data-act=more]'); page.wait_for_timeout(100); page.click('#ask [data-act=task-new][data-order]'); page.wait_for_timeout(150)   # the task button is inside "Още"
     page.fill('#t-title', 'Обади се на Иван за адреса'); page.select_option('#t-assignee', 'u2'); page.click('[data-act=task-save]'); page.wait_for_timeout(300)
     print('after save, popup is order again:', page.locator('.pop-in').get_attribute('aria-label'))
     page.click('.pop-x'); page.wait_for_timeout(150)

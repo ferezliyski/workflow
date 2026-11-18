@@ -16,7 +16,7 @@ def run(as_user):
     page.click('[data-act=tab][data-v=profile]'); page.wait_for_timeout(150)
     print(as_user, 'leave button:', page.locator('[data-act=tab][data-v=leave]').count())
     if as_user != 'u1':
-        page.evaluate("document.querySelector('.tab[data-v=profile]').setAttribute('data-v','leave')"); page.click('.tab >> nth=3'); page.wait_for_timeout(300)
+        page.evaluate("document.querySelector('.tab[data-v=profile]').setAttribute('data-v','leave')"); page.click('.tab[data-v=leave]'); page.wait_for_timeout(300)
         print('  member forced lands on:', page.inner_text('.top h1'), '| errors:', errs); b.close(); return
     page.click('[data-act=tab][data-v=leave]'); page.wait_for_timeout(300)
     print('  team:', [x.replace('\n',' — ') for x in page.locator('.group').nth(1).locator('.person').all_inner_texts()])
