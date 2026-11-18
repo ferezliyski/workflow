@@ -99,6 +99,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .ship{margin-top:8px;font-size:13.5px}
 a{color:var(--ink)}
 .ready{margin-top:6px;font-weight:700;color:var(--ink)}
+.ready.waiting{color:var(--next)}
 .more{appearance:none;display:block;width:100%;min-height:40px;border:0;border-top:1px solid var(--line);background:none;color:var(--soft);font-weight:700;font-size:13px}
 .phone-row{display:flex;align-items:center;flex-wrap:wrap;gap:4px 12px;margin-top:12px;font-size:13.5px}
 .phone-row .link{padding:4px 0;font-size:13px}
@@ -263,7 +264,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0651';
+const VERSION = '20261118-0742';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -441,7 +442,7 @@ function cardHtml(o) {
     if (done) action = '';
     else if (unconfirmed(o)) action = '';
     else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
-    else if (st.code === 'ready') action = allReady ? '' : '<p class="ready">✓ Готов</p>';
+    else if (st.code === 'ready') action = allReady ? '' : '<p class="ready waiting">✓ Готов</p>';
     else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
     return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
   }).join('');
