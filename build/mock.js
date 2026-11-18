@@ -32,7 +32,7 @@
     async load() {
       calls.load++;
       const c = JSON.parse(JSON.stringify(db));
-      return sent({ designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
+      return sent({ designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', category: 'Jujutsu Kaizen', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', category: 'Naruto', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', category: 'Любов', active: true, kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
         history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt, price: i.price })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
