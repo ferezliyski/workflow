@@ -107,6 +107,7 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - copy buttons for name, address and phone;
   - Viber button next to the phone number;
   - price per product (typed by hand, per piece); cash on delivery = the sum, without delivery;
+  - "Платена" button in the order: asks "Само поръчката" / "Поръчката и доставката" (`orders.paid_manual`); cash on delivery then shows 0 € with that text; "Върни" undoes it;
   - design (ready print) per t-shirt, picked from the catalogue loaded from the store (`designs`).
 - **Profile:**
   - Personal tasks: admin sees and assigns everyone's; a member sees only their own and can only tick the admin's tasks.

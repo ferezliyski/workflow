@@ -109,6 +109,7 @@ table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .dopt{display:block;width:100%;padding:9px 12px;border:0;background:none;color:var(--ink);font-size:14.5px;font-weight:600;text-align:left}
 .cod{font-weight:800;font-size:16px}
 .cod:empty{display:none}
+.cod .paidtxt{font-weight:600;font-size:13px;color:var(--soft)}
 #f-total{margin-top:12px}
 .iprice{font-size:13.5px;font-weight:700}
 .btn:disabled{opacity:.5}
@@ -495,6 +496,7 @@ function phoneKey(p) {
 const otherOrders = o => { const k = phoneKey(o.phone); return k ? D.history.filter(h => h.id !== o.id && phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : []; };
 const star = o => otherOrders(o).length ? '<span class="star" title="Поръчвал е и преди" aria-label="Поръчвал е и преди">★</span>' : '';
 const money = v => v == null || v === '' ? '' : `${Number(v).toFixed(2).replace('.', ',')} €`;
+const PAID_TXT = { order: 'Платена поръчка · доставката е за клиента', all: 'Платена поръчка и доставка' };
 const priceInput = v => v == null ? '' : String(v).replace('.', ',');
 const priceStr = v => { const n = parsePrice(v); return n == null ? '' : String(n); };
 const lineSum = it => it.price == null || it.price === '' ? null : Number(it.price) * (it.qty || 1);
@@ -589,7 +591,7 @@ function cardHtml(o) {
   const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ') + (o.shop_name ? ' ' + o.shop_name : '');
   const badges = [
     o.cancelled_at ? '<span class="badge urgent">Отказана в сайта</span>' : '',
-    o.paid ? '<span class="badge">Платена</span>' : '',
+    o.paid || o.paid_manual ? '<span class="badge">Платена</span>' : '',
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
     o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
@@ -616,7 +618,7 @@ function cardHtml(o) {
   else if (unconfirmed(o)) orderRow = nowRow('Потвърждение по телефона', 'wait', 'confirm', o.id, 'Потвърди');
   else if (allReady && !o.packed_at) orderRow = nowRow('Опаковане', 'work', 'pack', o.id, 'Напред');
   else if (allReady) orderRow = nowRow('Изпращане', 'work', 'send-open', o.id, 'Изпрати') +
-    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && (o.paid ? 'Платена ' : 'НП ') + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
+    ((o.address || o.phone || o.price != null) ? `<p class="ship">${e([shipName(o), o.phone, o.address, money(o.price) && (o.paid || o.paid_manual ? 'Платена ' : 'НП ') + money(o.price)].filter(Boolean).join(' · '))}</p>` : '');
   return `<article class="card ${o.urgent ? 'urgent' : ''}" data-act="open" data-id="${o.id}" role="button" tabindex="0" aria-label="Поръчка ${o.num}, подробности">
     <div class="card-top">
       <div class="row1"><span class="num">#${o.num}</span><span class="who">${e(o.customer || 'Без име')}${star(o)}</span><span class="src">${e(src)}</span></div>
@@ -734,7 +736,9 @@ function bodyHtml(o) {
     <div class="inline"><input class="field" id="rcp-${o.id}" data-field="recipient" data-id="${o.id}" value="${e(o.recipient || '')}" autocomplete="off"><button class="copy" data-act="copy" data-v="${e(shipName(o))}">Копирай</button></div>
     <label class="lbl" for="adr-${o.id}">Адрес за доставка${o.delivery ? ' · ' + e(o.delivery) : ''}</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
-    ${itemsOf(o).some(it => it.price != null)
+    ${o.paid_manual
+      ? `<span class="lbl">Наложен платеж</span><p class="cod">${e(money(0))} <span class="paidtxt">${e(PAID_TXT[o.paid_manual])}</span> <button class="link" data-act="paid" data-v="" data-id="${o.id}">Върни</button></p>`
+      : itemsOf(o).some(it => it.price != null)
       ? `<span class="lbl">${o.paid ? 'Платена с карта' : 'Наложен платеж'}</span><p class="cod">${e(money(o.price))}</p>`
       : `<label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
     <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">`}
@@ -756,6 +760,9 @@ function bodyHtml(o) {
     <div class="actions">
       <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
       ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
+      ${o.paid || o.paid_manual ? '' : UI.armed === 'pay:' + o.id
+        ? `<button class="btn ghost" data-act="paid" data-v="order" data-id="${o.id}">Само поръчката</button><button class="btn ghost" data-act="paid" data-v="all" data-id="${o.id}">Поръчката и доставката</button>`
+        : `<button class="btn ghost" data-act="paid" data-id="${o.id}">Платена</button>`}
       <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
       <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
     </div>
@@ -2038,7 +2045,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del' && a !== 'paid') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
@@ -2231,6 +2238,10 @@ document.addEventListener('click', async ev => {
     }
     case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
     case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
+    case 'paid':
+      if (v == null && UI.armed !== 'pay:' + id) { UI.armed = 'pay:' + id; return render(); }
+      UI.armed = null;
+      return act(() => api.update('orders', id, { paid_manual: v || null }));
     case 'urgent': return act(() => api.update('orders', id, { urgent: !findOrder(id).urgent }));
     case 'delete':
       if (UI.armed !== id) { UI.armed = id; return render(); }

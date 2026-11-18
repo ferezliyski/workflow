@@ -19,6 +19,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - completion: waybill_at/by (= "Завършена"), tracking
   - record: created_by, created_at, updated_at
   - from the store: shop_order_id (Shopify order id, unique per brand), shop_name (e.g. #1005), delivery (shipping method title), paid (paid online), cancelled_at (cancelled in the store)
+  - paid_manual: null | 'order' (products paid, customer pays delivery) | 'all' (products and delivery paid). Set by hand with the "Платена" button; cash on delivery is then shown as 0. `price` keeps the sum (statistics). Shopify never touches it.
 - **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, price (per piece; null on old orders), design (name of the ready print, '' if none), sku (from the store), custom_design, note, photo_at/by (= on photo shoot), sort, created_at
 - **designs**: id, brand, name, category (from the SKU prefix, see `private.shop_category`; shown before the design name), kind ('single' | 'set'), sku (single: SKU without `-BLACK-3`; set: whole SKU), product_type_id, shop_product_id, active. The catalogue of ready prints, filled from Shopify. Members can only read.
 - **shop_events**: log of what arrived from the stores (brand, topic, shop_order_id, result, received_at). No customer data. Admin can read.

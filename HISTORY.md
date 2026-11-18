@@ -80,6 +80,8 @@ This file continues the work from an earlier chat with Claude. Read it together 
     - Site orders will arrive by themselves, always "за потвърждение" (the team calls every customer), without design/approval stages. Sets become two t-shirts.
     - A cancelled site order is not deleted; it gets the badge "Отказана в сайта".
     - Waiting for the owner: add the webhooks in Shopify and the secret in Supabase (see CLAUDE.md → Roadmap).
+18. **18.11, later:** Slash sync live; stock (Наличности), Returns and Материали tabs (see CLAUDE.md → Business rules).
+19. **18.11, "Платена" button** in the order (version 20261118-2038): "Само поръчката" or "Поръчката и доставката"; cash on delivery then shows 0 € with that text.
 
 ## Still to do (in the owner's order)
 
