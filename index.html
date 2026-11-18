@@ -79,6 +79,10 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
+.ret{margin-top:4px;color:#1f8a4c;font-weight:800;font-size:13px}
+:root[data-theme="dark"] .ret{color:#4cc27f}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ret{color:#4cc27f}}
+.ret-btn{margin:8px 0 4px;background:#1f8a4c;color:#fff;min-height:40px;font-size:14px}
 table.stock td{padding:5px 4px;font-size:13px}
 table.stock tr.col td{padding-top:12px;text-align:left;font-weight:800;border-bottom:0}
 table.stock tr.ord td{color:var(--soft)}
@@ -338,7 +342,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1755';
+const VERSION = '20261118-1806';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -356,7 +360,7 @@ function realApi() {
     async signOut() { await sb.auth.signOut(); },
     async load() {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
-      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history, designs, stock] = await Promise.all([
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history, designs, stock, returns] = await Promise.all([
         sb.from('members').select('*'),
         sb.from('options').select('*').order('sort'),
         sb.from('stage_defs').select('*').order('sort'),
@@ -367,9 +371,10 @@ function realApi() {
         sb.from('order_notes').select('*').order('created_at'),
         sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt, price)').order('created_at'),
         sb.from('designs').select('id, brand, name, kind, category, active, product_type_id').order('name'),
-        sb.from('stock_levels').select('*')
+        sb.from('stock_levels').select('*'),
+        this.loadReturns()
       ]);
-      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history), designs: ok(designs), stock: ok(stock) };
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history), designs: ok(designs), stock: ok(stock), returns };
     },
     // only what changed since a moment: orders (with their products and stages), tasks and notes
     async syncSince(iso) {
@@ -388,6 +393,8 @@ function realApi() {
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
     },
+    // returns still on the shelf, and the ones used in the last 30 days
+    async loadReturns() { return ok(await sb.from('returns').select('*').or(`used_at.is.null,used_at.gte.${new Date(Date.now() - 30 * 864e5).toISOString()}`).order('created_at')); },
     async loadStock() { return ok(await sb.from('stock_levels').select('*')); },
     async stockMoves() { return ok(await sb.from('stock_moves').select('*').in('kind', ['load', 'scrap', 'count']).order('created_at', { ascending: false }).limit(15)); },
     async addStock(rows) { ok(await sb.from('stock_moves').insert(rows)); },
@@ -418,6 +425,7 @@ function realApi() {
       ch = on(ch, 'order_notes', h.notes);
       ['members', 'options', 'product_types', 'product_type_stages'].forEach(t => { ch = on(ch, t, h.config); });
       ch = on(ch, 'stock_moves', h.stock);
+      ch = on(ch, 'returns', h.returns);
       ch.subscribe(status => h.status(status));
     }
   };
@@ -426,7 +434,7 @@ const api = window.__mockApi || realApi();
 
 /* ---------- state ---------- */
 let me = null;
-let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [], stock: [] };
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [], stock: [], returns: [] };
 const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
@@ -532,7 +540,7 @@ const designPick = (pre, d) => {
     + (d.custom ? `<input class="field" id="${pre}-dname" style="margin-top:8px" value="${e(d.design)}" autocomplete="off" aria-label="Име на дизайна">` : ''); };
 // The list opens under the field. The screen is never moved by the app here (the owner's choice).
 function setDList(pre, html) { const box = $('#' + pre + '-dl'); if (box) box.innerHTML = html; }
-const designDraft = pre => pre === 'f' ? (F && F.edit) : (UI.itemEdit && UI.itemEdit.draft);
+const designDraft = pre => pre === 'f' ? (F && F.edit) : pre === 'rt' ? UI.retEdit : (UI.itemEdit && UI.itemEdit.draft);
 function designTyped(t) {
   const pre = t.id.split('-')[0], d = designDraft(pre); if (!d) return;
   d.dq = t.value;
@@ -541,8 +549,8 @@ function designTyped(t) {
   setDList(pre, designList(pre, d.typeId, t.value));
 }
 const designMissing = d => !d.custom && !d.design && String(d.dq || '').trim() ? 'Избери дизайн от списъка.' : '';
-document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre); if (d) setDList(pre, designList(pre, d.typeId, d.design ? '' : t.value)); } });
-document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) setTimeout(() => { if (document.activeElement !== t && document.contains(t)) setDList(t.id.split('-')[0], ''); }, 250); });
+document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie|rt)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre); if (d) setDList(pre, designList(pre, d.typeId, d.design ? '' : t.value)); } });
+document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie|rt)-dq$/.test(t.id)) setTimeout(() => { if (document.activeElement !== t && document.contains(t)) setDList(t.id.split('-')[0], ''); }, 250); });
 
 /* ---------- views ---------- */
 function viewAuth() {
@@ -595,7 +603,8 @@ function cardHtml(o) {
     else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
     else if (st.code === 'ready') action = allReady ? '' : '<p class="ready waiting">✓ Готов</p>';
     else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
-    return `<div class="prod"><p class="prod-name"><span>${itemLabelHtml(it)}</span>${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
+    const retRow = !done && retCovers(it) ? '<p class="ret">↩ Има в Returns</p>' : '';
+    return `<div class="prod"><p class="prod-name"><span>${itemLabelHtml(it)}</span>${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${retRow}${action}</div>`;
   }).join('');
   let orderRow = '';
   if (done) orderRow = `<p class="ready">✓ Завършена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
@@ -696,6 +705,8 @@ function bodyHtml(o) {
     if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
     return `<div class="item"><div class="item-h"><h3>${itemLabelHtml(it)}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
       ${it.price != null ? `<p class="iprice">${e(money(lineSum(it)))}</p>` : ''}
+      ${retTaken(it).length ? `<p class="ret">↩ Взета от Returns <button class="link" data-act="ret-undo" data-id="${it.id}">Върни</button></p>`
+        : !o.waybill_at && retCovers(it) ? `<button class="btn ret-btn" data-act="ret-take" data-id="${it.id}">↩ Вземи от Returns</button>` : ''}
       ${it.custom_design ? '<p class="small muted">Персонален дизайн</p>' : ''}
       ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
       <div class="steps">${steps}${photo}</div></div>`;
@@ -751,7 +762,7 @@ function bodyHtml(o) {
 // so the body is pinned in place and its scroll position restored on close.
 let lockY = null;
 function lockPage() {
-  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || UI.stockEdit || F);
+  const on = !!(UI.open || UI.fopen || UI.task || UI.workPerson || UI.leavePerson || UI.leaveEdit || UI.stockEdit || UI.retEdit || F);
   const st = document.body.style;
   if (on && lockY === null) {
     lockY = window.scrollY;
@@ -791,6 +802,15 @@ function renderPop() {
     return;
   }
   UI.workPerson = null;
+  if (UI.retEdit && UI.tab === 'returns') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'ret' ? prev.scrollTop : 0;
+    box.innerHTML = retPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.retEdit = null;
   if (UI.stockEdit && UI.tab === 'stock') {
     const prev = box.querySelector('.pop-in');
     const keepY = prev && prev.dataset.kind === 'stock' ? prev.scrollTop : 0;
@@ -840,17 +860,24 @@ const pendingBlanks = () => D.orders.filter(o => !o.waybill_at && !o.cancelled_a
 let PLAN = null;
 function stockPlan() {
   if (PLAN) return PLAN;
-  const used = {}, waiting = new Set();
+  const used = {}, waiting = new Set(), covered = new Map();
+  const free = (D.returns || []).filter(r => !r.used_at);
   pendingBlanks().forEach(it => {
+    // a made t-shirt from Returns that matches covers the item: it needs no blank and does not wait
+    const k0 = retKey(it.product_type_id, it.design, it.size, it.color), hit = free.filter(r => retKey(r.product_type_id, r.design, r.size, r.color) === k0);
+    if (hit.length >= it.qty) { const ids = hit.slice(0, it.qty).map(r => r.id); covered.set(it.id, ids); ids.forEach(id => free.splice(free.findIndex(r => r.id === id), 1)); return; }
     if (!stockCounted(it.product_type_id)) return;
     const k = stockKey(it.product_type_id, it.size, it.color), left = stockQty(it.product_type_id, it.size, it.color) - (used[k] || 0);
     if (left >= it.qty) used[k] = (used[k] || 0) + it.qty; else waiting.add(it.id);
   });
-  PLAN = { waiting };
+  PLAN = { waiting, covered };
   setTimeout(() => { PLAN = null; }, 0);
   return PLAN;
 }
 const missingFor = it => stockPlan().waiting.has(it.id);
+const retKey = (t, d, sz, c) => [t, String(d || '').trim().toLowerCase(), sz, c].join('|');
+const retCovers = it => stockPlan().covered.get(it.id);
+const retTaken = it => (D.returns || []).filter(r => r.used_item_id === it.id);
 // an order waits for a size while a product that is not yet made has no blank left
 const sizeWaitItems = o => o.packed_at || o.waybill_at ? [] : itemsOf(o).filter(it => itemState(it).code !== 'ready' && missingFor(it));
 const waitsSize = o => sizeWaitItems(o).length > 0;
@@ -1052,7 +1079,7 @@ function viewDone() {
 function viewStock() {
   const tees = D.types.filter(t => t.is_tshirt);
   const ordered = {};
-  pendingBlanks().forEach(it => { const k = stockKey(it.product_type_id, it.size, it.color); ordered[k] = (ordered[k] || 0) + it.qty; });
+  pendingBlanks().forEach(it => { if (retCovers(it)) return; const k = stockKey(it.product_type_id, it.size, it.color); ordered[k] = (ordered[k] || 0) + it.qty; });
   const blocks = tees.map(t => {
     const counted = stockCounted(t.id);
     const have = t.sizes.reduce((a, sz) => a + t.colors.reduce((b, c) => b + stockQty(t.id, sz, c), 0), 0);
@@ -1073,6 +1100,69 @@ function viewStock() {
     <div class="actions" style="margin:0 0 14px"><button class="btn" data-act="stock-open" data-v="load" style="flex:1">Зареждане</button><button class="btn ghost" data-act="stock-open" data-v="scrap" style="flex:1">Брак</button></div>
     ${blocks}
     ${moves ? `<section class="block"><h2><span>Последни зареждания и брак</span></h2>${moves}</section>` : ''}`;
+}
+function viewReturns() {
+  const free = (D.returns || []).filter(r => !r.used_at).slice().reverse();
+  const forOrder = {};
+  stockPlan().covered.forEach((ids, itemId) => { const o = D.orders.find(x => itemsOf(x).some(i => i.id === itemId)); ids.forEach(id => { forOrder[id] = o; }); });
+  const label = r => { const t = D.types.find(x => x.id === r.product_type_id); return itemLabelHtml({ design: r.design, name: t ? t.name : '?', qty: 1, size: r.size, color: r.color }); };
+  const used = (D.returns || []).filter(r => r.used_at).sort((a, b) => a.used_at < b.used_at ? 1 : -1).slice(0, 10);
+  const orderOfItem = id => D.orders.find(x => itemsOf(x).some(i => i.id === id));
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Returns <span class="h-n">(${free.length})</span></h1></div>
+    <button class="btn wide" data-act="ret-open" style="margin-bottom:14px">Добави</button>
+    ${free.length ? `<section class="block">${free.map(r => { const o = forOrder[r.id];
+      return `<div class="miss-row"><span><b>${label(r)}</b><br><span class="small muted">${e(nameOf(r.created_by) || '')} · ${e(day(r.created_at))}</span>${o ? `<br><span class="ret">↩ За поръчка #${o.num} ${e(o.customer || '')}</span>` : ''}</span>
+        <button class="link" data-act="ret-del" data-id="${r.id}">${UI.armed === 'ret:' + r.id ? 'Натисни пак' : 'Махни'}</button></div>`; }).join('')}</section>`
+      : '<p class="empty">Няма върнати тениски.</p>'}
+    ${used.length ? `<section class="block"><h2><span>Използвани</span></h2>${used.map(r => { const o = orderOfItem(r.used_item_id);
+      return `<div class="miss-row"><span><b>${label(r)}</b><br><span class="small muted">${o ? `→ #${o.num} ${e(o.customer || '')} · ` : ''}${e(day(r.used_at))}</span></span></div>`; }).join('')}</section>` : ''}`;
+}
+function retPopHtml() {
+  const R = UI.retEdit, tees = D.types.filter(t => t.is_tshirt), t = tees.find(x => x.id === R.typeId);
+  const chips = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="ret" role="dialog" aria-modal="true" aria-label="Добави в Returns">
+    <div class="pop-head"><b class="who">Добави в Returns</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">
+      <span class="lbl">Модел</span><div class="chips">${tees.map(x => `<button type="button" class="chip" data-act="ret-type" data-v="${x.id}" aria-pressed="${R.typeId === x.id}">${e(x.name)}</button>`).join('')}</div>
+      ${t ? `${designPick('rt', R)}<span class="lbl">Размер</span>${chips('ret-size', t.sizes, R.size)}<span class="lbl">Цвят</span>${chips('ret-color', t.colors, R.color)}
+        <span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ret-qty" data-v="-1" aria-label="По-малко">−</button><b>${R.qty}</b><button type="button" data-act="ret-qty" data-v="1" aria-label="Повече">+</button></div>` : ''}
+      <p class="err" role="alert">${e(R.err || '')}</p>
+      ${t ? `<button class="btn wide" data-act="ret-save" ${R.busy ? 'disabled' : ''}>Добави</button>` : ''}
+    </div></div></div>`;
+}
+async function saveReturn() {
+  const R = UI.retEdit;
+  if (!R.typeId) { R.err = 'Избери модел.'; return renderPop(); }
+  if (designMissing(R)) { R.err = designMissing(R); return renderPop(); }
+  if (!R.size || !R.color) { R.err = 'Избери размер и цвят.'; return renderPop(); }
+  R.busy = true; R.err = ''; renderPop();
+  try { for (let i = 0; i < R.qty; i++) await api.insert('returns', { product_type_id: R.typeId, design: (R.design || '').trim(), size: R.size, color: R.color, created_by: me.id }); }
+  catch (x) { R.busy = false; R.err = 'Не успях да запазя. Провери интернета и опитай пак.'; return renderPop(); }
+  UI.retEdit = null; renderPop(); toast('Добавено в Returns');
+  await reloadReturns();
+}
+async function takeReturn(itemId) {
+  const ids = retCovers({ id: itemId }); if (!ids) return;
+  let it; D.orders.some(o => o.items.some(i => { if (i.id === itemId) it = i; return !!it; }));
+  if (!it) return;
+  const now = new Date().toISOString();
+  try {
+    // first link the returns, so the press below does not take a new blank
+    await Promise.all(ids.map(id => api.update('returns', id, { used_item_id: itemId, used_at: now, used_by: me.id })));
+    await Promise.all(stagesOf(it).filter(x => !x.done_at).map(x => api.update('item_stages', x.id, { done_at: now, done_by: me.id })));
+  } catch (x) { toast('Не успях. Провери интернета и опитай пак.'); }
+  toast('Взета от Returns');
+  await reloadReturns(); await refresh(true);
+}
+async function untakeReturn(itemId) {
+  let it; D.orders.some(o => o.items.some(i => { if (i.id === itemId) it = i; return !!it; }));
+  try {
+    await Promise.all(retTaken({ id: itemId }).map(r => api.update('returns', r.id, { used_item_id: null, used_at: null, used_by: null })));
+    if (it) await Promise.all(stagesOf(it).filter(x => x.done_at).map(x => api.update('item_stages', x.id, { done_at: null, done_by: null })));
+  } catch (x) { toast('Не успях. Провери интернета и опитай пак.'); }
+  toast('Върната в Returns');
+  await reloadReturns(); await refresh(true);
 }
 function stockPopHtml() {
   const S = UI.stockEdit, tees = D.types.filter(t => t.is_tshirt), t = tees.find(x => x.id === S.typeId);
@@ -1500,7 +1590,7 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button><button class="btn dark wide" data-act="tab" data-v="returns" style="margin-top:8px">Returns${(D.returns || []).some(r => !r.used_at) ? ` (${D.returns.filter(r => !r.used_at).length})` : ''}</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1589,8 +1679,8 @@ function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, returns: viewReturns, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock', 'returns'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1768,7 +1858,7 @@ async function sync() {
       r.orders.forEach(mergeOrder);
       r.tasks.forEach(t => upsert(D.tasks, t));
       r.notes.forEach(n => upsert(D.notes, n));
-      try { D.stock = await api.loadStock(); PLAN = null; } catch (x) { /* keep the old numbers */ }
+      try { const [st, rt] = await Promise.all([api.loadStock(), api.loadReturns()]); D.stock = st; D.returns = rt; PLAN = null; } catch (x) { /* keep the old numbers */ }
       lastSync = t0;
     } catch (x) { /* offline: try again later */ }
   })();
@@ -1803,6 +1893,9 @@ async function reloadConfig() {
   try { Object.assign(D, await api.loadConfig()); } catch (x) { return; }
   redraw();
 }
+let retTimer = 0;
+function onReturnsChange() { clearTimeout(retTimer); retTimer = setTimeout(reloadReturns, 400); }
+async function reloadReturns() { try { D.returns = await api.loadReturns(); } catch (x) { return; } PLAN = null; redraw(); if (UI.open || UI.retEdit) renderPop(); }
 let stockTimer = 0;
 function onStockChange() { clearTimeout(stockTimer); stockTimer = setTimeout(reloadStock, 400); }
 function onConfigChange() { clearTimeout(configTimer); configTimer = setTimeout(reloadConfig, 400); }
@@ -1867,12 +1960,12 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; UI.retEdit = null; if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; return render();
@@ -1881,7 +1974,7 @@ document.addEventListener('click', async ev => {
     case 'done-mode': UI.doneMode = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.retEdit) { UI.retEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'prod-open': UI.prodOpen = !UI.prodOpen; return renderPop();
     case 'prod-sub': UI.prod = v; UI.sub = b.dataset.sub; UI.prodOpen = false; return render();
@@ -2072,6 +2165,21 @@ document.addEventListener('click', async ev => {
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
     case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
+    case 'ret-open': { const tees = D.types.filter(t => t.is_tshirt); UI.retEdit = { typeId: tees.length ? tees[0].id : '', design: '', dq: null, custom: false, size: '', color: '', qty: 1, err: '' }; return renderPop(); }
+    case 'ret-type': Object.assign(UI.retEdit, { typeId: v, design: '', dq: null, custom: false, size: '', color: '', err: '' }); return renderPop();
+    case 'rt-dpick': UI.retEdit.design = v; UI.retEdit.dq = v; setDList('rt', ''); return renderPop();
+    case 'ret-size': UI.retEdit.size = v; return renderPop();
+    case 'ret-color': UI.retEdit.color = v; return renderPop();
+    case 'ret-qty': UI.retEdit.qty = Math.max(1, UI.retEdit.qty + Number(v)); return renderPop();
+    case 'ret-save': return saveReturn();
+    case 'ret-take': return takeReturn(id);
+    case 'ret-undo': return untakeReturn(id);
+    case 'ret-del': {
+      if (UI.armed !== 'ret:' + id) { UI.armed = 'ret:' + id; return render(); }
+      UI.armed = null;
+      try { await api.remove('returns', id); } catch (x) { return toast('Не успях. Провери интернета.'); }
+      toast('Махнато'); return reloadReturns();
+    }
     case 'stock-open': {
       const tees = D.types.filter(t => t.is_tshirt), t = (v === 'count' && tees.find(x => x.id === id)) || tees[0], vals = {};
       if (v === 'count' && t) t.colors.forEach(c => t.sizes.forEach(sz => { vals[sz + '|' + c] = String(stockQty(t.id, sz, c)); }));
@@ -2127,7 +2235,8 @@ document.addEventListener('keydown', ev => {
 });
 document.addEventListener('input', ev => {
   if (ev.target.dataset.stock != null && UI.stockEdit) { UI.stockEdit.vals[ev.target.dataset.stock] = ev.target.value; return; }
-  if (/^(f|ie)-dq$/.test(ev.target.id)) return designTyped(ev.target);
+  if (/^(f|ie|rt)-dq$/.test(ev.target.id)) return designTyped(ev.target);
+  if (ev.target.id === 'rt-dname' && UI.retEdit) { UI.retEdit.design = ev.target.value; return; }
   const t = ev.target;
   if (UI.leaveEdit) {
     const k = { 'lv-start': 'start', 'lv-end': 'end', 'lv-note': 'note' }[t.id];
@@ -2165,6 +2274,7 @@ document.addEventListener('change', ev => {
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
     if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note, price: d.price }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
+    if (t.id === 'rt-custom' && UI.retEdit) { Object.assign(UI.retEdit, { custom: t.checked, design: '', dq: '' }); return renderPop(); }
     if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; UI.itemEdit.draft.design = ''; UI.itemEdit.draft.dq = ''; return renderPop(); }
     if (/^ie-/.test(t.id)) return;
   }
@@ -2217,7 +2327,7 @@ async function start() {
   await fullLoad();
   if (!live) {
     live = true;
-    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, stock: onStockChange, status: onLiveStatus });
+    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, stock: onStockChange, returns: onReturnsChange, status: onLiveStatus });
     // safety net in case a live update was missed: a light catch-up every 3 minutes while on screen
     setInterval(() => { if (!document.hidden) refresh(); }, 3 * 60000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

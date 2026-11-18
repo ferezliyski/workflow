@@ -24,6 +24,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
 - **shop_events**: log of what arrived from the stores (brand, topic, shop_order_id, result, received_at). No customer data. Admin can read.
 - **stock_moves**: id, product_type_id, size, color, delta (+ in, − out), kind ('load' | 'scrap' | 'press' | 'count' = inventory difference), item_id (for 'press'), created_by, created_at. Every change of the blank stock is a row. Members can insert and delete only 'load', 'scrap' and 'count' rows (as themselves); 'press' rows come from a trigger.
 - **stock_levels** (view, security invoker): product_type_id, size, color, qty (= sum of delta), loaded (the cell had a load). Every t-shirt type is counted from 0.
+- **returns**: id, product_type_id, design, size, color, created_by, created_at, used_item_id, used_at, used_by. Made t-shirts that came back. Every member can read and write. Realtime on.
 - **item_stages**: id, item_id, stage_key, name, kind, sort, done_at/by. Each item gets its own copy of its stages.
 - **order_notes**: id, order_id, body, author, created_at
 - **tasks**: id, title, note, due, urgent, assignee, created_by, order_id, done_at/by, created_at, updated_at
@@ -49,7 +50,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - `private.add_member` inserts the new person into members.
 - `updated_at`: kept up to date on orders, tasks and leaves.
 - `items_sync_order_price` (`private.sync_order_price`): when an order has items with a price, `orders.price` (cash on delivery) = sum of price × qty. Delivery is not included. Orders whose items have no price keep the total typed by hand.
-- `item_stages_stock` (`private.stock_on_press`): when "Щамповане" of a t-shirt item is done, a 'press' move takes qty blanks; undoing it gives back what that press took. ("Печат" is DTF film, it does not use a shirt.)
+- `item_stages_stock` (`private.stock_on_press`): when "Щамповане" of a t-shirt item is done, a 'press' move takes qty blanks; undoing it gives back what that press took. An item taken from returns (a returns row with its used_item_id) takes no blank. ("Печат" is DTF film, it does not use a shirt.)
 - Change stamps on the order: any change to items, item_stages or order_notes also bumps `orders.updated_at`. Incremental sync relies on this.
 
 ## Functions (RPC)
@@ -63,7 +64,7 @@ To read a function's full definition: `select pg_get_functiondef('public.create_
 
 ## Realtime publication
 
-members, options, product_types, product_type_stages, orders, tasks, order_notes, stock_moves
+members, options, product_types, product_type_stages, orders, tasks, order_notes, stock_moves, returns
 
 ## Shopify sync
 

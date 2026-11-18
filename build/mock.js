@@ -10,7 +10,7 @@
   ['t0','t1','t2','t3','t4'].forEach(t => add(t, ['design?', 'approval?', 'print', 'press']));
   add('t5', ['design','approval','print_pages','print_covers','assemble']); add('t6', ['design','assemble']); add('t7', ['design','print']);
   add('t8', ['design','approval','cutfile','cut','print']); add('t9', ['design','cutfile','cut','print']);
-  const db = { stock_moves: [], leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
+  const db = { returns: [], stock_moves: [], leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
   [['brand','Slash'],['brand','Meivi'],['channel','TikTok'],['channel','Instagram'],['channel','Messenger'],['channel','Viber'],['channel','Сайт'],['channel','Телефон'],['account','Meivi'],['account','Auto'],['account','Inlove'],['account','Zodiac']].forEach((o, i) => db.options.push({ id: id(), kind: o[0], value: o[1], sort: i }));
   let logged = false, num = 0, rt = null;
   const calls = { load: 0, syncSince: 0, loadOrders: 0, loadConfig: 0, loadAll: 0, bytes: 0 };
@@ -36,7 +36,7 @@
     async load() {
       calls.load++;
       const c = JSON.parse(JSON.stringify(db));
-      return sent({ stock: levels(), designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', category: 'Jujutsu Kaizen', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', category: 'Naruto', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', category: 'Любов', active: true, kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
+      return sent({ returns: db.returns.map(r => ({ ...r })), stock: levels(), designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', category: 'Jujutsu Kaizen', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', category: 'Naruto', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', category: 'Любов', active: true, kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
         history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt, price: i.price })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
@@ -58,6 +58,7 @@
       return [...out.values()];
     },
     async loadStock() { return levels(); },
+    async loadReturns() { return db.returns.map(r => ({ ...r })); },
     async stockMoves() { return db.stock_moves.filter(m => m.kind === 'load' || m.kind === 'scrap' || m.kind === 'count').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
     async addStock(rows) { rows.forEach(r => db.stock_moves.push({ id: ++mv, created_at: now(), ...r })); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async removeStockMove(i) { db.stock_moves = db.stock_moves.filter(m => m.id !== i); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
@@ -85,7 +86,7 @@
     },
     async update(t, i, patch) {
       const row = db[t].find(r => r.id === i); const wasDone = row && row.done_at; Object.assign(row, patch);
-      if (t === 'item_stages' && row.stage_key === 'press' && !!wasDone !== !!row.done_at) { const it = db.items.find(x => x.id === row.item_id);
+      if (t === 'item_stages' && row.stage_key === 'press' && !db.returns.some(r => r.used_item_id === row.item_id) && !!wasDone !== !!row.done_at) { const it = db.items.find(x => x.id === row.item_id);
         if (it && it.is_tshirt && it.product_type_id && it.size && it.color) {
           const taken = -db.stock_moves.filter(m => m.item_id === it.id && m.kind === 'press').reduce((x, m) => x + m.delta, 0);
           const loaded = db.stock_moves.some(m => m.product_type_id === it.product_type_id && m.kind === 'load');
@@ -105,6 +106,7 @@
         if (t === 'tasks') setTimeout(() => rt.tasks({ eventType: 'INSERT', new: { ...r } }), 30);
         if (t === 'order_notes') setTimeout(() => rt.notes({ eventType: 'INSERT', new: { ...r } }), 30);
         if (t === 'options') setTimeout(() => rt.config({}), 30);
+        if (t === 'returns' && rt.returns) setTimeout(() => rt.returns({}), 30);
       }
       const oid = orderOf(t, r); if (oid) touch(oid, window.__silent);
     },

@@ -86,6 +86,9 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Щамповане" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red.
   - Doing "Щамповане" takes the blank off the shelf ("Печат" is DTF film, not on the shirt); undoing it puts it back.
   - Missing sizes are automatic: oldest orders get the blanks first; an order whose not-yet-pressed t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Every type is counted from 0, so before the first load all t-shirt orders wait (owner's choice).
+- **Returns** (Profile → "Returns"): made t-shirts that came back (not collected, or swapped). "Добави" picks model, design (same searchable list, or a personal design), size, colour and count.
+  - An open order whose not-yet-pressed t-shirt matches a free return (same model, design, size, colour; oldest order first) shows "↩ Има в Returns" on its card, needs no blank and never waits for a size.
+  - In the order, "↩ Вземи от Returns" links the return to the item and marks all its stages done (no blank is taken). "Върни" undoes it.
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
   2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):
