@@ -79,6 +79,14 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
+table.stock td{padding:5px 4px;font-size:13px}
+table.stock tr.col td{padding-top:12px;text-align:left;font-weight:800;border-bottom:0}
+table.stock tr.ord td{color:var(--soft)}
+table.stock tr.after td:first-child{font-weight:800}
+table.stock td.low{background:#f6c445;color:#1b1b1b;font-weight:800;border-radius:6px}
+table.stock td.neg{background:var(--accent);color:var(--on-accent);font-weight:800;border-radius:6px}
+table.stock-in td{padding:4px 2px}
+table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .qp{display:flex;align-items:flex-start;gap:18px}
 .qp-p{flex:1;min-width:0}
 .qp-p .field{min-height:46px}
@@ -329,7 +337,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1713';
+const VERSION = '20261118-1736';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -347,7 +355,7 @@ function realApi() {
     async signOut() { await sb.auth.signOut(); },
     async load() {
       const since = new Date(Date.now() - 30 * 864e5).toISOString();
-      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history, designs] = await Promise.all([
+      const [members, options, stageDefs, types, typeStages, orders, tasks, notes, history, designs, stock] = await Promise.all([
         sb.from('members').select('*'),
         sb.from('options').select('*').order('sort'),
         sb.from('stage_defs').select('*').order('sort'),
@@ -357,9 +365,10 @@ function realApi() {
         sb.from('tasks').select('*').order('created_at'),
         sb.from('order_notes').select('*').order('created_at'),
         sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt, price)').order('created_at'),
-        sb.from('designs').select('id, brand, name, kind, category, active, product_type_id').order('name')
+        sb.from('designs').select('id, brand, name, kind, category, active, product_type_id').order('name'),
+        sb.from('stock_levels').select('*')
       ]);
-      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history), designs: ok(designs) };
+      return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history), designs: ok(designs), stock: ok(stock) };
     },
     // only what changed since a moment: orders (with their products and stages), tasks and notes
     async syncSince(iso) {
@@ -378,6 +387,10 @@ function realApi() {
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages) };
     },
+    async loadStock() { return ok(await sb.from('stock_levels').select('*')); },
+    async stockMoves() { return ok(await sb.from('stock_moves').select('*').in('kind', ['load', 'scrap']).order('created_at', { ascending: false }).limit(15)); },
+    async addStock(rows) { ok(await sb.from('stock_moves').insert(rows)); },
+    async removeStockMove(id) { ok(await sb.from('stock_moves').delete().eq('id', id)); },
     async workStats(from, to) { return ok(await sb.rpc('work_stats', { p_from: from, p_to: to })); },
     async loadLeave() {
       const [allowances, leaves, holidays, settings] = await Promise.all([
@@ -403,6 +416,7 @@ function realApi() {
       ch = on(ch, 'tasks', h.tasks);
       ch = on(ch, 'order_notes', h.notes);
       ['members', 'options', 'product_types', 'product_type_stages'].forEach(t => { ch = on(ch, t, h.config); });
+      ch = on(ch, 'stock_moves', h.stock);
       ch.subscribe(status => h.status(status));
     }
   };
@@ -411,7 +425,7 @@ const api = window.__mockApi || realApi();
 
 /* ---------- state ---------- */
 let me = null;
-let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [] };
+let D = { members: [], options: [], stageDefs: [], types: [], typeStages: [], orders: [], tasks: [], notes: [], history: [], designs: [], stock: [] };
 const UI = { tab: 'orders', filter: 'all', onlyUrgent: false, onlyLate: false, prodOpen: false, brand: 'all', prod: 'all', sub: 'all', fopen: false, open: null, searching: false, q: '', person: null, task: null, showDone: false, statsPeriod: 'month', workPeriod: '7', work: null, workPerson: null, leaveYear: new Date().getFullYear(), leaveMonth: null, leavePerson: null, leaveEdit: null, showHolidays: false, editPhone: null, itemEdit: null, sumMode: 'all', armed: null, authMode: 'in', authErr: '', busy: false };
 let F = null; // new-order form
 
@@ -776,6 +790,15 @@ function renderPop() {
     return;
   }
   UI.workPerson = null;
+  if (UI.stockEdit && UI.tab === 'stock') {
+    const prev = box.querySelector('.pop-in');
+    const keepY = prev && prev.dataset.kind === 'stock' ? prev.scrollTop : 0;
+    box.innerHTML = stockPopHtml();
+    box.querySelector('.pop-in').scrollTop = keepY;
+    lockPage();
+    return;
+  }
+  UI.stockEdit = null;
   if (UI.task) {
     const prev = box.querySelector('.pop-in');
     const keepY = prev && prev.dataset.kind === 'task' ? prev.scrollTop : 0;
@@ -801,13 +824,34 @@ function renderPop() {
 // Products can be grouped (all t-shirt models sit under "Тениски")
 const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
 const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
-// Missing sizes: stored as options of kind "missing", value "typeId|size|colour" (empty colour = every colour)
-const missingList = () => opts('missing').map(o => { const [typeId, size, color] = o.value.split('|'); return { id: o.id, typeId, size, color: color || '' }; });
-const missingFor = it => { const t = typeOfItem(it); return t && missingList().find(m => m.typeId === t.id && m.size === it.size && (!m.color || m.color === it.color)); };
-// an order waits for a size while a product that is not yet made uses a missing size
+// Stock of blanks. D.stock = rows { product_type_id, size, color, qty } (qty = what is on the shelf).
+// A product type is "counted" once it has been loaded at least once; only counted types can make orders wait for a size.
+const stockKey = (t, sz, c) => `${t}|${sz}|${c}`;
+const stockQty = (t, sz, c) => { const r = (D.stock || []).find(x => x.product_type_id === t && x.size === sz && x.color === c); return r ? r.qty : 0; };
+const stockCounted = t => (D.stock || []).some(x => x.product_type_id === t && x.loaded);
+// a t-shirt still needs a blank while its "Печат" is not done (orders not sent and not cancelled in the store)
+const needsBlank = it => { if (!it.is_tshirt || !it.product_type_id || !it.size || !it.color) return false;
+  const pr = stagesOf(it).find(s => s.stage_key === 'print'); return pr ? !pr.done_at : itemState(it).code !== 'ready'; };
+const pendingBlanks = () => D.orders.filter(o => !o.waybill_at && !o.cancelled_at).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
+  .flatMap(o => itemsOf(o).filter(needsBlank));
+// oldest orders get the blanks first; an item that does not fit waits for its size
+let PLAN = null;
+function stockPlan() {
+  if (PLAN) return PLAN;
+  const used = {}, waiting = new Set();
+  pendingBlanks().forEach(it => {
+    if (!stockCounted(it.product_type_id)) return;
+    const k = stockKey(it.product_type_id, it.size, it.color), left = stockQty(it.product_type_id, it.size, it.color) - (used[k] || 0);
+    if (left >= it.qty) used[k] = (used[k] || 0) + it.qty; else waiting.add(it.id);
+  });
+  PLAN = { waiting };
+  setTimeout(() => { PLAN = null; }, 0);
+  return PLAN;
+}
+const missingFor = it => stockPlan().waiting.has(it.id);
+// an order waits for a size while a product that is not yet made has no blank left
 const sizeWaitItems = o => o.packed_at || o.waybill_at ? [] : itemsOf(o).filter(it => itemState(it).code !== 'ready' && missingFor(it));
 const waitsSize = o => sizeWaitItems(o).length > 0;
-const missingLabel = m => { const t = D.types.find(x => x.id === m.typeId); return [t ? t.name : '?', m.size, m.color || 'всички цветове'].join(' · '); };
 function filterData() {
   const everything = activeOrders().filter(o => !o.packed_at && !waitsSize(o));
   // store filter first; everything below is counted within the chosen store
@@ -932,8 +976,7 @@ function viewOrders() {
   if (UI.noSize) {
     if (!waiting.length) UI.noSize = false;
     else return `<button class="link back" data-act="nosize" data-v="">← Поръчки</button>
-      <div class="top"><h1>Чакат размер <span class="h-n">(${waiting.length})</span></h1><button class="fbtn" data-act="tab" data-v="missing">Липсващи</button></div>
-      <p class="small muted" style="margin-bottom:10px">Връщат се в списъка сами, когато махнеш размера от „Липсващи размери“.</p>
+      <div class="top"><h1>Чакат размер <span class="h-n">(${waiting.length})</span></h1><button class="fbtn" data-act="tab" data-v="stock">Наличности</button></div>
       ${waiting.map(cardHtml).join('')}`;
   }
   const f = filterData();
@@ -1004,28 +1047,82 @@ function viewDone() {
       : `${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`}`;
 }
 
-function viewMissing() {
-  const M = UI.miss || (UI.miss = { typeId: '', size: '', color: '' });
-  const types = D.types.filter(t => (t.sizes || []).length);
-  if (!types.some(t => t.id === M.typeId)) M.typeId = types.length ? types[0].id : '';
-  const t = types.find(x => x.id === M.typeId);
-  if (t && !t.sizes.includes(M.size)) M.size = t.sizes[0] || '';
-  if (t && M.color && !(t.colors || []).includes(M.color)) M.color = '';
-  const count = m => activeOrders().filter(o => sizeWaitItems(o).some(it => missingFor(it) && missingFor(it).id === m.id)).length;
-  const list = missingList();
+function viewStock() {
+  const tees = D.types.filter(t => t.is_tshirt);
+  const ordered = {};
+  pendingBlanks().forEach(it => { const k = stockKey(it.product_type_id, it.size, it.color); ordered[k] = (ordered[k] || 0) + it.qty; });
+  const blocks = tees.map(t => {
+    // until the first load of a product, its cells are not marked as low
+    const counted = stockCounted(t.id);
+    const have = t.sizes.reduce((a, sz) => a + t.colors.reduce((b, c) => b + stockQty(t.id, sz, c), 0), 0);
+    const rows = t.colors.map(c => {
+      const cells = t.sizes.map(sz => { const h = stockQty(t.id, sz, c), o = ordered[stockKey(t.id, sz, c)] || 0; return { h, o, a: h - o }; });
+      const line = (lbl, f, cls) => `<tr class="${cls}"><td>${lbl}</td>${cells.map(x => { const v = f(x); return `<td class="${cls === 'after' ? (v < 0 ? 'neg' : v < 5 && counted ? 'low' : 'v') : v ? 'v' : 'z'}">${v || (cls === 'after' ? '0' : '·')}</td>`; }).join('')}</tr>`;
+      return `<tr class="col"><td colspan="${t.sizes.length + 1}">${e(c)}</td></tr>${line('Налични', x => x.h, 'have')}${line('Поръчани', x => x.o, 'ord')}${line('След', x => x.a, 'after')}`;
+    }).join('');
+    return `<section class="block"><h2><span>${e(t.name)}</span><span>${have} бр.</span></h2>
+      <div class="tbl-wrap"><table class="stock"><thead><tr><th></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
+  }).join('');
+  const M = UI.stockMoves;
+  const moves = M && M.rows ? M.rows.map(m => { const t = D.types.find(x => x.id === m.product_type_id);
+    return `<div class="miss-row"><span><b>${m.delta > 0 ? '+' : ''}${m.delta} · ${e(t ? t.name : '?')} · ${e(m.size)} · ${e(m.color)}</b><br><span class="small muted">${m.kind === 'load' ? 'Заредено' : 'Брак'} · ${e(nameOf(m.created_by) || '')} · ${e(day(m.created_at))}</span></span>
+      <button class="link" data-act="stock-undo" data-id="${m.id}">${UI.armed === 'mv:' + m.id ? 'Натисни пак' : 'Махни'}</button></div>`; }).join('') : '';
   return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
-    <div class="top"><h1>Липсващи размери</h1></div>
-    <section class="block">
-      <label class="lbl" for="ms-type">Вид</label><select class="field" id="ms-type">${types.map(x => `<option value="${x.id}" ${x.id === M.typeId ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</select>
-      <div class="actions" style="margin-top:0">
-        <div style="flex:1"><label class="lbl" for="ms-size">Размер</label><select class="field" id="ms-size">${(t ? t.sizes : []).map(x => `<option ${x === M.size ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
-        <div style="flex:1"><label class="lbl" for="ms-color">Цвят</label><select class="field" id="ms-color"><option value="" ${!M.color ? 'selected' : ''}>Всички</option>${(t ? t.colors || [] : []).map(x => `<option ${x === M.color ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
-      </div>
-      <button class="btn wide" data-act="miss-add" style="margin-top:10px">Добави като липсващ</button>
-    </section>
-    <section class="block"><h2><span>Липсват сега</span></h2>
-      ${list.length ? list.map(m => { const n = count(m); return `<div class="miss-row"><span><b>${e(missingLabel(m))}</b><br><span class="small muted">${n ? `${n} ${n === 1 ? 'поръчка чака' : 'поръчки чакат'}` : 'няма чакащи поръчки'}</span></span><button class="btn ghost" data-act="miss-del" data-id="${m.id}">Заредихме</button></div>`; }).join('') : '<p class="empty" style="margin:8px 0 0">Няма липсващи размери.</p>'}
-    </section>`;
+    <div class="top"><h1>Наличности</h1></div>
+    <div class="actions" style="margin:0 0 14px"><button class="btn" data-act="stock-open" data-v="load" style="flex:1">Заредихме</button><button class="btn ghost" data-act="stock-open" data-v="scrap" style="flex:1">Брак</button></div>
+    ${blocks}
+    ${moves ? `<section class="block"><h2><span>Последни зареждания и брак</span></h2>${moves}</section>` : ''}`;
+}
+function stockPopHtml() {
+  const S = UI.stockEdit, tees = D.types.filter(t => t.is_tshirt), t = tees.find(x => x.id === S.typeId);
+  const chips = (act, list, cur) => `<div class="chips">${list.map(v => `<button type="button" class="chip" data-act="${act}" data-v="${e(v)}" aria-pressed="${cur === v}">${e(v)}</button>`).join('')}</div>`;
+  let body = `<span class="lbl">Продукт</span><div class="chips">${tees.map(x => `<button type="button" class="chip" data-act="stock-type" data-v="${x.id}" aria-pressed="${S.typeId === x.id}">${e(x.name)}</button>`).join('')}</div>`;
+  if (t && S.mode === 'load') {
+    body += `<div class="tbl-wrap"><table class="stock-in"><thead><tr><th></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>
+      ${t.colors.map(c => `<tr><td>${e(c)}</td>${t.sizes.map(sz => `<td><input class="field" inputmode="numeric" data-stock="${e(sz)}|${e(c)}" value="${e(S.vals[sz + '|' + c] || '')}" aria-label="${e(c)} ${e(sz)}"></td>`).join('')}</tr>`).join('')}
+    </tbody></table></div>`;
+  } else if (t) {
+    body += `<span class="lbl">Размер</span>${chips('stock-size', t.sizes, S.size)}<span class="lbl">Цвят</span>${chips('stock-color', t.colors, S.color)}
+      <span class="lbl">Брой</span><div class="qty"><button type="button" data-act="stock-qty" data-v="-1" aria-label="По-малко">−</button><b>${S.qty}</b><button type="button" data-act="stock-qty" data-v="1" aria-label="Повече">+</button></div>`;
+  }
+  return `<div class="pop" data-act="close-pop"><div class="pop-in" data-kind="stock" role="dialog" aria-modal="true" aria-label="${S.mode === 'load' ? 'Заредихме' : 'Брак'}">
+    <div class="pop-head"><b class="who">${S.mode === 'load' ? 'Заредихме' : 'Брак'}</b><button class="pop-x" data-act="close-pop" data-x="1">Затвори</button></div>
+    <div class="card-body">${body}<p class="err" role="alert">${e(S.err || '')}</p>
+      ${t ? `<button class="btn wide" data-act="stock-save" ${S.busy ? 'disabled' : ''}>${S.mode === 'load' ? 'Добави към наличностите' : 'Махни от наличностите'}</button>` : ''}</div>
+  </div></div>`;
+}
+async function loadStockMoves() {
+  try { UI.stockMoves = { rows: await api.stockMoves() }; } catch (x) { UI.stockMoves = null; }
+  if (UI.tab === 'stock') render();
+}
+async function reloadStock() {
+  try { D.stock = await api.loadStock(); } catch (x) { return; }
+  PLAN = null; redraw();
+  if (UI.tab === 'stock') loadStockMoves();
+}
+async function saveStock() {
+  const S = UI.stockEdit, t = D.types.find(x => x.id === S.typeId);
+  let rows = [];
+  if (S.mode === 'load') {
+    for (const k of Object.keys(S.vals)) {
+      const raw = String(S.vals[k]).trim(); if (!raw) continue;
+      const n = Number(raw);
+      if (!Number.isInteger(n) || n < 0) { S.err = 'Пиши само цели числа.'; return renderPop(); }
+      const [size, color] = k.split('|');
+      if (n) rows.push({ product_type_id: t.id, size, color, delta: n, kind: 'load', created_by: me.id });
+    }
+    if (!rows.length) { S.err = 'Попълни поне едно число.'; return renderPop(); }
+  } else {
+    if (!S.size || !S.color) { S.err = 'Избери размер и цвят.'; return renderPop(); }
+    rows = [{ product_type_id: t.id, size: S.size, color: S.color, delta: -S.qty, kind: 'scrap', created_by: me.id }];
+  }
+  S.busy = true; S.err = ''; renderPop();
+  try { await api.addStock(rows); }
+  catch (x) { S.busy = false; S.err = 'Не успях да запазя. Провери интернета и опитай пак.'; return renderPop(); }
+  const n = rows.reduce((a, r) => a + Math.abs(r.delta), 0);
+  UI.stockEdit = null; renderPop();
+  toast(S.mode === 'load' ? `Заредени ${n} бр.` : `Махнати ${n} бр. като брак`);
+  await reloadStock();
 }
 
 function viewSettings() {
@@ -1391,8 +1488,7 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const missN = missingList().length;
-  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="missing" style="margin-top:8px">Липсващи размери${missN ? ` (${missN})` : ''}</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="stock" style="margin-top:8px">Наличности</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1481,8 +1577,8 @@ function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, missing: viewMissing, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stock: viewStock, missing: viewStock, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing', 'stock'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1660,6 +1756,7 @@ async function sync() {
       r.orders.forEach(mergeOrder);
       r.tasks.forEach(t => upsert(D.tasks, t));
       r.notes.forEach(n => upsert(D.notes, n));
+      try { D.stock = await api.loadStock(); PLAN = null; } catch (x) { /* keep the old numbers */ }
       lastSync = t0;
     } catch (x) { /* offline: try again later */ }
   })();
@@ -1694,6 +1791,8 @@ async function reloadConfig() {
   try { Object.assign(D, await api.loadConfig()); } catch (x) { return; }
   redraw();
 }
+let stockTimer = 0;
+function onStockChange() { clearTimeout(stockTimer); stockTimer = setTimeout(reloadStock, 400); }
 function onConfigChange() { clearTimeout(configTimer); configTimer = setTimeout(reloadConfig, 400); }
 function onLiveStatus(status) {
   if (status === 'SUBSCRIBED') { if (liveDown) { liveDown = false; refresh(); } }
@@ -1756,12 +1855,12 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
     case 'auth-mode': UI.authMode = v; UI.authErr = ''; return render();
-    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
+    case 'tab': UI.workPerson = null; UI.leavePerson = null; UI.leaveEdit = null; UI.stockEdit = null; if (v === 'stock' || v === 'missing') setTimeout(loadStockMoves, 0); if (v === 'work' && isAdmin()) setTimeout(loadWork, 0); if (v === 'leave' && isAdmin()) setTimeout(loadLeave, 0);
       if (v !== 'orders') { UI.searching = false; UI.q = ''; } UI.tab = v; UI.open = null; UI.fopen = false; UI.task = null; if (v === 'profile' && UI.tab !== 'settings') UI.person = UI.person; render(); lockY = null; return window.scrollTo(0, 0);
     case 'filter': UI.filter = v; return render();
     case 'brand': UI.brand = v; return render();
@@ -1770,7 +1869,7 @@ document.addEventListener('click', async ev => {
     case 'done-mode': UI.doneMode = v; return render();
     case 'sum-mode': UI.sumMode = v; return render();
     case 'open': UI.task = null; UI.editPhone = null; UI.itemEdit = null; UI.open = id; return renderPop();
-    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
+    case 'close-pop': if (!b.dataset.x && ev.target !== b) return; if (UI.stockEdit) { UI.stockEdit = null; return renderPop(); } if (UI.leaveEdit) { UI.leaveEdit = null; return renderPop(); } UI.leavePerson = null; UI.itemEdit = null; UI.workPerson = null; if (UI.task) { UI.task = null; return renderPop(); } UI.open = null; UI.fopen = false; return renderPop();
     case 'filters': UI.fopen = true; return renderPop();
     case 'prod-open': UI.prodOpen = !UI.prodOpen; return renderPop();
     case 'prod-sub': UI.prod = v; UI.sub = b.dataset.sub; UI.prodOpen = false; return render();
@@ -1961,14 +2060,18 @@ document.addEventListener('click', async ev => {
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
     case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
-    case 'miss-add': {
-      const M = UI.miss; if (!M || !M.typeId || !M.size) return;
-      const val = [M.typeId, M.size, M.color].join('|');
-      if (opts('missing').some(o => o.value === val)) return toast('Вече е в списъка.');
-      toast('Добавено · поръчките с този размер отиват в „Чакат размер“');
-      return act(() => api.insert('options', { kind: 'missing', value: val, sort: opts('missing').length + 1 }), { config: true });
+    case 'stock-open': { const tees = D.types.filter(t => t.is_tshirt); UI.stockEdit = { mode: v, typeId: tees.length ? tees[0].id : '', vals: {}, size: '', color: '', qty: 1, err: '' }; return renderPop(); }
+    case 'stock-type': Object.assign(UI.stockEdit, { typeId: v, vals: {}, size: '', color: '', err: '' }); return renderPop();
+    case 'stock-size': UI.stockEdit.size = v; return renderPop();
+    case 'stock-color': UI.stockEdit.color = v; return renderPop();
+    case 'stock-qty': UI.stockEdit.qty = Math.max(1, UI.stockEdit.qty + Number(v)); return renderPop();
+    case 'stock-save': return saveStock();
+    case 'stock-undo': {
+      if (UI.armed !== 'mv:' + id) { UI.armed = 'mv:' + id; return render(); }
+      UI.armed = null;
+      try { await api.removeStockMove(Number(id)); } catch (x) { return toast('Не успях. Провери интернета.'); }
+      toast('Махнато'); return reloadStock();
     }
-    case 'miss-del': toast('Махнато · поръчките се връщат в списъка'); return act(() => api.remove('options', id), { config: true });
     /* form */
     case 'f-close': F = null; return renderForm();
     case 'f-brand': F.brand = v; return renderForm();
@@ -2007,6 +2110,7 @@ document.addEventListener('keydown', ev => {
   else if (ev.key === 'Escape' && (UI.open || UI.fopen)) { UI.open = null; UI.fopen = false; renderPop(); }
 });
 document.addEventListener('input', ev => {
+  if (ev.target.dataset.stock != null && UI.stockEdit) { UI.stockEdit.vals[ev.target.dataset.stock] = ev.target.value; return; }
   if (/^(f|ie)-dq$/.test(ev.target.id)) return designTyped(ev.target);
   const t = ev.target;
   if (UI.leaveEdit) {
@@ -2040,7 +2144,6 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
-  if (UI.tab === 'missing' && /^ms-/.test(t.id)) { const k = { 'ms-type': 'typeId', 'ms-size': 'size', 'ms-color': 'color' }[t.id]; UI.miss[k] = t.value; return render(); }
   if (UI.leaveEdit && t.id === 'lv-user') { UI.leaveEdit.draft.user_id = t.value; return renderPop(); }
   if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
@@ -2098,7 +2201,7 @@ async function start() {
   await fullLoad();
   if (!live) {
     live = true;
-    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, status: onLiveStatus });
+    api.subscribe({ orders: onOrderChange, tasks: onTaskChange, notes: onNoteChange, config: onConfigChange, stock: onStockChange, status: onLiveStatus });
     // safety net in case a live update was missed: a light catch-up every 3 minutes while on screen
     setInterval(() => { if (!document.hidden) refresh(); }, 3 * 60000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });

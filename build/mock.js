@@ -10,13 +10,15 @@
   ['t0','t1','t2','t3','t4'].forEach(t => add(t, ['design?', 'approval?', 'print', 'press']));
   add('t5', ['design','approval','print_pages','print_covers','assemble']); add('t6', ['design','assemble']); add('t7', ['design','print']);
   add('t8', ['design','approval','cutfile','cut','print']); add('t9', ['design','cutfile','cut','print']);
-  const db = { leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
+  const db = { stock_moves: [], leave_allowances: [], leaves: [], holidays: [{ day: '2026-12-24', name: 'Бъдни вечер' }, { day: '2026-12-25', name: 'Коледа' }, { day: '2026-12-28', name: 'Коледа (почивен ден вместо 26 декември)' }, { day: '2027-01-01', name: 'Нова година' }], app_settings: [{ key: 'workweek', value: '5' }], tasks: [], order_notes: [], members: [{ user_id: 'u1', name: 'Мартин', is_admin: true }, { user_id: 'u2', name: 'Гошо', is_admin: false }], options: [], orders: [], items: [], item_stages: [], product_types: types };
   [['brand','Slash'],['brand','Meivi'],['channel','TikTok'],['channel','Instagram'],['channel','Messenger'],['channel','Viber'],['channel','Сайт'],['channel','Телефон'],['account','Meivi'],['account','Auto'],['account','Inlove'],['account','Zodiac']].forEach((o, i) => db.options.push({ id: id(), kind: o[0], value: o[1], sort: i }));
   let logged = false, num = 0, rt = null;
   const calls = { load: 0, syncSince: 0, loadOrders: 0, loadConfig: 0, loadAll: 0, bytes: 0 };
   const sent = v => { calls.bytes += JSON.stringify(v).length; return v; };
   const num0 = v => v === '' || v == null ? null : Number(v);
   const syncPrice = oid => { const l = db.items.filter(i => i.order_id === oid && i.price != null); if (l.length) db.orders.find(o => o.id === oid).price = l.reduce((a, i) => a + i.price * i.qty, 0); };
+  let mv = 0;
+  const levels = () => { const m = new Map(); db.stock_moves.forEach(x => { const k = x.product_type_id + '|' + x.size + '|' + x.color; const r = m.get(k) || { product_type_id: x.product_type_id, size: x.size, color: x.color, qty: 0, loaded: false }; r.qty += x.delta; r.loaded = r.loaded || x.kind === 'load'; m.set(k, r); }); return [...m.values()]; };
   const full = o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ ...i, item_stages: db.item_stages.filter(s => s.item_id === i.id) })) });
   // same rules as the database triggers: any change inside an order marks the order as changed
   const touch = (orderId, silent) => { const o = db.orders.find(x => x.id === orderId); if (!o) return; o.updated_at = now(); if (!silent && rt) setTimeout(() => rt.orders({ eventType: 'UPDATE', new: { ...o } }), 30); };
@@ -32,7 +34,7 @@
     async load() {
       calls.load++;
       const c = JSON.parse(JSON.stringify(db));
-      return sent({ designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', category: 'Jujutsu Kaizen', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', category: 'Naruto', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', category: 'Любов', active: true, kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
+      return sent({ stock: levels(), designs: [{ id: 'd1', brand: 'Slash', name: 'Gojo Satoru „Infinity“', category: 'Jujutsu Kaizen', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd2', brand: 'Slash', name: 'Sasuke', category: 'Naruto', active: true, kind: 'single', product_type_id: 't0' }, { id: 'd3', brand: 'Slash', name: 'Един отбор', category: 'Любов', active: true, kind: 'set', product_type_id: 't0' }], members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
         history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt, price: i.price })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
@@ -53,6 +55,10 @@
       calls.bytes += JSON.stringify([...out.values()]).length;
       return [...out.values()];
     },
+    async loadStock() { return levels(); },
+    async stockMoves() { return db.stock_moves.filter(m => m.kind !== 'print').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
+    async addStock(rows) { rows.forEach(r => db.stock_moves.push({ id: ++mv, created_at: now(), ...r })); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
+    async removeStockMove(i) { db.stock_moves = db.stock_moves.filter(m => m.id !== i); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async loadLeave() { return JSON.parse(JSON.stringify({ allowances: db.leave_allowances, leaves: db.leaves, holidays: db.holidays.slice().sort((a, b) => a.day < b.day ? -1 : 1), settings: db.app_settings })); },
     async upsert(t, row) { const key = t === 'leave_allowances' ? r => r.user_id === row.user_id && r.year === row.year : t === 'holidays' ? r => r.day === row.day : r => r.key === row.key; const i = db[t].findIndex(key); if (i >= 0) db[t][i] = { ...db[t][i], ...row }; else db[t].push({ ...row }); },
     async removeBy(t, col, val) { db[t] = db[t].filter(r => r[col] !== val); },
@@ -76,7 +82,13 @@
       return o.id;
     },
     async update(t, i, patch) {
-      const row = db[t].find(r => r.id === i); Object.assign(row, patch);
+      const row = db[t].find(r => r.id === i); const wasDone = row && row.done_at; Object.assign(row, patch);
+      if (t === 'item_stages' && row.stage_key === 'print' && !!wasDone !== !!row.done_at) { const it = db.items.find(x => x.id === row.item_id);
+        if (it && it.is_tshirt && it.product_type_id && it.size && it.color) {
+          const taken = -db.stock_moves.filter(m => m.item_id === it.id && m.kind === 'print').reduce((x, m) => x + m.delta, 0);
+          const loaded = db.stock_moves.some(m => m.product_type_id === it.product_type_id && m.kind === 'load');
+          const delta = row.done_at ? (loaded ? -it.qty : 0) : taken;
+          if (delta) db.stock_moves.push({ id: ++mv, product_type_id: it.product_type_id, size: it.size, color: it.color, delta, kind: 'print', item_id: it.id, created_at: now() }); } }
       if (t === 'tasks') { row.updated_at = now(); if (rt && !window.__silent) setTimeout(() => rt.tasks({ eventType: 'UPDATE', new: { ...row } }), 30); }
       const oid = orderOf(t, row); if (oid) touch(oid, window.__silent);
       if (['options', 'product_types'].includes(t) && rt && !window.__silent) setTimeout(() => rt.config({}), 30);

@@ -80,11 +80,12 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - **Photo shoot:**
   - "На снимане": `items.photo_at` can be set at any stage. "Върната" continues from where it stopped.
   - "Заяви за снимане" (`orders.photo_req`) is not a stage. Marketing flags an order. When the last production stage is finished, the person who finished it sees a big "Предай за снимане" notice. All items get `photo_at` automatically, and `photo_req` is cleared.
-- **Missing sizes:**
-  - Profile → "Липсващи размери". Stored as `options` with kind `missing`.
-  - Orders with a not-yet-made item in a missing size leave the main list. They go behind a yellow button at the top of Поръчки, "⚠ Чакат размер (n)", with a ⚠ badge on the card.
-  - In "За правене" those cells are yellow with ⚠, plus a note under the table.
-  - Pressing "Заредихме" removes the entry and the orders come back.
+- **Stock (Наличности)**, Profile → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
+  - Blanks per product type × size × colour (all t-shirt types and hoodies; Slash and Meivi oversize are different blanks). Started at 0; the team loads what they have.
+  - "Заредихме" adds a grid of numbers; "Брак" takes out one size/colour; the last loads/scraps can be taken back ("Махни").
+  - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Печат" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red (only after the type's first load).
+  - Doing "Печат" takes the blank off the shelf; undoing it puts it back.
+  - Missing sizes are automatic: oldest orders get the blanks first; an order whose unprinted t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Only for types that have been loaded.
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
   2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):

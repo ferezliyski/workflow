@@ -6,7 +6,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
 
 - **members**: user_id (= auth.users.id), name, is_admin, created_at
 - **options**: id, kind ('brand' | 'channel' | 'account' | 'missing'), value, sort. Unique (kind, value).
-  - `missing` = missing sizes. value is `"<product_type_id>|<size>|<colour>"`, where an empty colour means every colour.
+  - `missing` is no longer used (replaced by the stock on 18.11.2026; the old rows were deleted).
 - **stage_defs**: key, name, kind ('work' | 'wait'), sort. Defines the stage catalogue.
 - **product_types**: id, name, is_tshirt, sizes text[], colors text[], sort, grp. grp groups t-shirt variants in the filter.
 - **product_type_stages**: product_type_id, stage_key, sort, optional. Holds the default stages per product.
@@ -22,6 +22,8 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
 - **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, price (per piece; null on old orders), design (name of the ready print, '' if none), sku (from the store), custom_design, note, photo_at/by (= on photo shoot), sort, created_at
 - **designs**: id, brand, name, category (from the SKU prefix, see `private.shop_category`; shown before the design name), kind ('single' | 'set'), sku (single: SKU without `-BLACK-3`; set: whole SKU), product_type_id, shop_product_id, active. The catalogue of ready prints, filled from Shopify. Members can only read.
 - **shop_events**: log of what arrived from the stores (brand, topic, shop_order_id, result, received_at). No customer data. Admin can read.
+- **stock_moves**: id, product_type_id, size, color, delta (+ in, − out), kind ('load' | 'scrap' | 'print'), item_id (for 'print'), created_by, created_at. Every change of the blank stock is a row. Members can insert and delete only 'load' and 'scrap' rows (as themselves); 'print' rows come from a trigger.
+- **stock_levels** (view, security invoker): product_type_id, size, color, qty (= sum of delta), loaded (the cell had a load). A product type counts as "counted" once it has any load.
 - **item_stages**: id, item_id, stage_key, name, kind, sort, done_at/by. Each item gets its own copy of its stages.
 - **order_notes**: id, order_id, body, author, created_at
 - **tasks**: id, title, note, due, urgent, assignee, created_by, order_id, done_at/by, created_at, updated_at
@@ -47,6 +49,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - `private.add_member` inserts the new person into members.
 - `updated_at`: kept up to date on orders, tasks and leaves.
 - `items_sync_order_price` (`private.sync_order_price`): when an order has items with a price, `orders.price` (cash on delivery) = sum of price × qty. Delivery is not included. Orders whose items have no price keep the total typed by hand.
+- `item_stages_stock` (`private.stock_on_print`): when "Печат" of a t-shirt item is done, a 'print' move takes qty blanks (only if that product type has had a load); undoing it gives back what that print took.
 - Change stamps on the order: any change to items, item_stages or order_notes also bumps `orders.updated_at`. Incremental sync relies on this.
 
 ## Functions (RPC)
@@ -60,7 +63,7 @@ To read a function's full definition: `select pg_get_functiondef('public.create_
 
 ## Realtime publication
 
-members, options, product_types, product_type_stages, orders, tasks, order_notes
+members, options, product_types, product_type_stages, orders, tasks, order_notes, stock_moves
 
 ## Shopify sync
 
