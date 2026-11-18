@@ -79,7 +79,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
-.dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;margin-top:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
+.dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;margin-bottom:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
 .dlist:empty{display:none}
 .dcat{padding:9px 12px 3px;font-size:12px;font-weight:700;color:var(--soft)}
 .dopt{display:block;width:100%;padding:9px 12px;border:0;background:none;color:var(--ink);font-size:14.5px;font-weight:600;text-align:left}
@@ -325,7 +325,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1625';
+const VERSION = '20261118-1629';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -508,31 +508,29 @@ const designList = (pre, typeId, q) => {
 };
 const designPick = (pre, d) => {
   const has = designsOf(d.typeId).length, q = d.dq != null ? d.dq : d.design;
-  const list = has && !d.custom ? `<label class="lbl" for="${pre}-dq">Дизайн</label><input class="field" id="${pre}-dq" value="${e(q)}" autocomplete="off" autocapitalize="off" spellcheck="false"><div class="dlist" id="${pre}-dl"></div>` : '';
+  const list = has && !d.custom ? `<label class="lbl" for="${pre}-dq">Дизайн</label><div class="dlist" id="${pre}-dl"></div><input class="field" id="${pre}-dq" value="${e(q)}" autocomplete="off" autocapitalize="off" spellcheck="false">` : '';
   return list + `<label class="check"><input type="checkbox" id="${pre}-custom" ${d.custom ? 'checked' : ''}>Персонален дизайн</label>`
     + (d.custom ? `<input class="field" id="${pre}-dname" style="margin-top:8px" value="${e(d.design)}" autocomplete="off" aria-label="Име на дизайна">` : ''); };
+// The list opens ABOVE the field, so the phone keyboard can never cover it. When it grows or shrinks, the form is
+// moved by exactly the same amount, so the field itself stays where the finger is and nothing else scrolls.
+function setDList(pre, html) {
+  const box = $('#' + pre + '-dl'); if (!box) return;
+  let sc = box.parentElement;
+  while (sc && !/auto|scroll/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+  const inp = $('#' + pre + '-dq') || box, y0 = inp.getBoundingClientRect().top; box.innerHTML = html;
+  if (sc && sc !== document.body && sc !== document.documentElement) sc.scrollTop += inp.getBoundingClientRect().top - y0;
+}
 const designDraft = pre => pre === 'f' ? (F && F.edit) : (UI.itemEdit && UI.itemEdit.draft);
 function designTyped(t) {
   const pre = t.id.split('-')[0], d = designDraft(pre); if (!d) return;
   d.dq = t.value;
   const ex = designsOf(d.typeId).find(x => x.name.toLowerCase() === t.value.toLowerCase().trim());
   d.design = ex ? ex.name : '';
-  const box = $('#' + pre + '-dl'); if (box) box.innerHTML = designList(pre, d.typeId, t.value);
+  setDList(pre, designList(pre, d.typeId, t.value));
 }
 const designMissing = d => !d.custom && !d.design && String(d.dq || '').trim() ? 'Избери дизайн от списъка.' : '';
-document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre), box = $('#' + pre + '-dl'); if (d && box) { box.innerHTML = designList(pre, d.typeId, d.design ? '' : t.value);
-  // the phone keyboard would cover the list: move only the form itself (never the whole page) so the field sits near its top
-  setTimeout(() => {
-    if (document.activeElement !== t) return;
-    let sc = t.parentElement;
-    while (sc && !(sc.scrollHeight > sc.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
-    if (!sc || sc === document.body || sc === document.documentElement) return;
-    const lb = t.previousElementSibling || t, top = lb.getBoundingClientRect().top - sc.getBoundingClientRect().top;
-    const room = (window.visualViewport ? window.visualViewport.height : window.innerHeight) - sc.getBoundingClientRect().top;
-    // already high enough for the list to fit above the keyboard: leave it where it is
-    if (top + 320 > room && top > 12) sc.scrollTop += top - 12;
-  }, 350); } } });
-document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) setTimeout(() => { const box = $('#' + t.id.split('-')[0] + '-dl'); if (box && document.activeElement !== t) box.innerHTML = ''; }, 250); });
+document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre); if (d) setDList(pre, designList(pre, d.typeId, d.design ? '' : t.value)); } });
+document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) setTimeout(() => { if (document.activeElement !== t && document.contains(t)) setDList(t.id.split('-')[0], ''); }, 250); });
 
 /* ---------- views ---------- */
 function viewAuth() {
@@ -1801,7 +1799,7 @@ document.addEventListener('click', async ev => {
     case 'ie-open': UI.armed = null; return startItemEdit(b.dataset.order, id || null);
     case 'ie-cancel': UI.itemEdit = null; return renderPop();
     case 'ie-save': return saveItemEdit();
-    case 'ie-dpick': UI.itemEdit.draft.design = v; UI.itemEdit.draft.dq = v; return renderPop();
+    case 'ie-dpick': UI.itemEdit.draft.design = v; UI.itemEdit.draft.dq = v; setDList('ie', ''); return renderPop();
     case 'ie-size': UI.itemEdit.draft.size = v; return renderPop();
     case 'ie-color': UI.itemEdit.draft.color = v; return renderPop();
     case 'ie-qty': UI.itemEdit.draft.qty = Math.max(1, UI.itemEdit.draft.qty + Number(v)); return renderPop();
@@ -1982,7 +1980,7 @@ document.addEventListener('click', async ev => {
     case 'f-brand': F.brand = v; return renderForm();
     case 'f-channel': F.channel = v; return renderForm();
     case 'f-account': F.account = v; return renderForm();
-    case 'f-dpick': F.edit.design = v; F.edit.dq = v; return renderForm();
+    case 'f-dpick': F.edit.design = v; F.edit.dq = v; setDList('f', ''); return renderForm();
     case 'f-size': F.edit.size = v; return renderForm();
     case 'f-color': F.edit.color = v; return renderForm();
     case 'f-qty': F.edit.qty = Math.max(1, F.edit.qty + Number(v)); return renderForm();
