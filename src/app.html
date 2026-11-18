@@ -709,8 +709,6 @@ function bodyHtml(o) {
       ? `<p class="sent">✓ Завършена · ${e(nameOf(o.waybill_by) || '')} · ${e(day(o.waybill_at))} <button class="link" data-act="unsend" data-id="${o.id}">Върни</button></p>`
       : `<div class="actions send"><button class="btn" data-act="send" data-id="${o.id}">Изпрати</button><button class="btn ghost" data-act="send" data-v="quiet" data-id="${o.id}">Изпрати без съобщение</button></div>
          ${o.phone ? '' : '<p class="small muted" style="margin-top:6px">Няма телефон за Viber.</p>'}`}
-    <label class="lbl" for="prb-${o.id}">Проблем (ако има)</label>
-    <input class="field" id="prb-${o.id}" data-field="problem" data-id="${o.id}" value="${e(o.problem)}" autocomplete="off">
     <span class="lbl">Бележки</span>
     <div class="notes">${notesOf(o.id).map(n => `<div class="note"><b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
     <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>

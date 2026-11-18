@@ -70,7 +70,7 @@ members, options, product_types, product_type_stages, orders, tasks, order_notes
   - `orders/create`: makes the order (channel 'Сайт', needs_confirm = true, name/phone/address from the shipping address, +359 → 0). Only this topic creates orders; a second delivery of the same order is ignored (unique index).
   - Line items: SKU `BASE-BLACK|WHITE-N` → design by BASE, colour, size = N-th size of the product type. Price = unit price minus discounts. Stages = the non-optional stages of the product type (no design/approval).
   - Sets (`designs.kind = 'set'`): two items, sizes and colours from the line item properties "Дамска/Мъжка тениска — размер/цвят", price split in half.
-  - Unknown SKU: item with the store title, no stages, and `orders.problem = 'Непознат продукт от сайта'`.
+  - Unknown SKU: item with the store title, no stages, and the item note 'Непознат продукт от сайта: провери го'. (`orders.problem` is no longer shown or edited in the app.)
   - `orders/updated`, `orders/cancelled`: only update cancelled_at and paid on an order that already exists.
   - `fulfillments/create|update`: fill `tracking` (the order is NOT completed automatically).
   - `products/create|update|delete`: keep `designs` up to date.
