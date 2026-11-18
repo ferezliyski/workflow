@@ -79,6 +79,9 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .pn{color:var(--blue)}
+.qp{display:flex;align-items:flex-start;gap:18px}
+.qp-p{flex:1;min-width:0}
+.qp-p .field{min-height:46px}
 .dlist{max-height:216px;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;margin-bottom:6px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface)}
 .dlist:empty{display:none}
 .dcat{padding:9px 12px 3px;font-size:12px;font-weight:700;color:var(--soft)}
@@ -617,8 +620,7 @@ function itemEditorHtml(o) {
       ${D.types.map(x => `<option value="${x.id}" ${d.typeId === x.id ? 'selected' : ''}>${e(x.name)}</option>`).join('')}
       <option value="custom" ${d.typeId === 'custom' ? 'selected' : ''}>Друго</option></select>
     ${body}
-    ${d.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ie-qty" data-v="-1" aria-label="По-малко">−</button><b>${d.qty}</b><button type="button" data-act="ie-qty" data-v="1" aria-label="Повече">+</button></div>
-      <label class="lbl" for="ie-price">Цена за брой, €</label><input class="field" id="ie-price" inputmode="decimal" value="${e(d.price)}" autocomplete="off">
+    ${d.typeId ? `<div class="qp"><div><span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ie-qty" data-v="-1" aria-label="По-малко">−</button><b>${d.qty}</b><button type="button" data-act="ie-qty" data-v="1" aria-label="Повече">+</button></div></div><div class="qp-p"><label class="lbl" for="ie-price">Цена за брой, €</label><input class="field" id="ie-price" inputmode="decimal" value="${e(d.price)}" autocomplete="off"></div></div>
       <label class="lbl" for="ie-note">Бележка за продукта</label><input class="field" id="ie-note" value="${e(d.note)}" autocomplete="off">` : ''}
     ${reset ? '<p class="warn">Етапите на този продукт ще започнат отначало.</p>' : ''}
     <p class="err" role="alert">${e(IE.err || '')}</p>
@@ -1524,8 +1526,7 @@ function editorHtml() {
       ${D.types.map(x => `<option value="${x.id}" ${it.typeId === x.id ? 'selected' : ''}>${e(x.name)}</option>`).join('')}
       <option value="custom" ${it.typeId === 'custom' ? 'selected' : ''}>Друго (нова задача)</option></select>
     ${body}
-    ${it.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div>
-      <label class="lbl" for="f-iprice">Цена за брой, €</label><input class="field" id="f-iprice" inputmode="decimal" value="${e(it.price)}" autocomplete="off">
+    ${it.typeId ? `<div class="qp"><div><span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div></div><div class="qp-p"><label class="lbl" for="f-iprice">Цена за брой, €</label><input class="field" id="f-iprice" inputmode="decimal" value="${e(it.price)}" autocomplete="off"></div></div>
       <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" autocomplete="off">
       <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>` : ''}
   </div>`;
