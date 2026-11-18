@@ -56,7 +56,7 @@
       return [...out.values()];
     },
     async loadStock() { return levels(); },
-    async stockMoves() { return db.stock_moves.filter(m => m.kind !== 'print').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
+    async stockMoves() { return db.stock_moves.filter(m => m.kind === 'load' || m.kind === 'scrap').slice().reverse().slice(0, 15).map(m => ({ ...m })); },
     async addStock(rows) { rows.forEach(r => db.stock_moves.push({ id: ++mv, created_at: now(), ...r })); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async removeStockMove(i) { db.stock_moves = db.stock_moves.filter(m => m.id !== i); if (rt && rt.stock && !window.__silent) setTimeout(() => rt.stock({}), 30); },
     async loadLeave() { return JSON.parse(JSON.stringify({ allowances: db.leave_allowances, leaves: db.leaves, holidays: db.holidays.slice().sort((a, b) => a.day < b.day ? -1 : 1), settings: db.app_settings })); },
@@ -83,12 +83,12 @@
     },
     async update(t, i, patch) {
       const row = db[t].find(r => r.id === i); const wasDone = row && row.done_at; Object.assign(row, patch);
-      if (t === 'item_stages' && row.stage_key === 'print' && !!wasDone !== !!row.done_at) { const it = db.items.find(x => x.id === row.item_id);
+      if (t === 'item_stages' && row.stage_key === 'press' && !!wasDone !== !!row.done_at) { const it = db.items.find(x => x.id === row.item_id);
         if (it && it.is_tshirt && it.product_type_id && it.size && it.color) {
-          const taken = -db.stock_moves.filter(m => m.item_id === it.id && m.kind === 'print').reduce((x, m) => x + m.delta, 0);
+          const taken = -db.stock_moves.filter(m => m.item_id === it.id && m.kind === 'press').reduce((x, m) => x + m.delta, 0);
           const loaded = db.stock_moves.some(m => m.product_type_id === it.product_type_id && m.kind === 'load');
           const delta = row.done_at ? (loaded ? -it.qty : 0) : taken;
-          if (delta) db.stock_moves.push({ id: ++mv, product_type_id: it.product_type_id, size: it.size, color: it.color, delta, kind: 'print', item_id: it.id, created_at: now() }); } }
+          if (delta) db.stock_moves.push({ id: ++mv, product_type_id: it.product_type_id, size: it.size, color: it.color, delta, kind: 'press', item_id: it.id, created_at: now() }); } }
       if (t === 'tasks') { row.updated_at = now(); if (rt && !window.__silent) setTimeout(() => rt.tasks({ eventType: 'UPDATE', new: { ...row } }), 30); }
       const oid = orderOf(t, row); if (oid) touch(oid, window.__silent);
       if (['options', 'product_types'].includes(t) && rt && !window.__silent) setTimeout(() => rt.config({}), 30);

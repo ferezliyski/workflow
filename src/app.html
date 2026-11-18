@@ -819,9 +819,9 @@ const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name
 const stockKey = (t, sz, c) => `${t}|${sz}|${c}`;
 const stockQty = (t, sz, c) => { const r = (D.stock || []).find(x => x.product_type_id === t && x.size === sz && x.color === c); return r ? r.qty : 0; };
 const stockCounted = t => (D.stock || []).some(x => x.product_type_id === t && x.loaded);
-// a t-shirt still needs a blank while its "Печат" is not done (orders not sent and not cancelled in the store)
+// a t-shirt still needs a blank while its "Щамповане" is not done (the print is DTF film, the shirt is used at the press) (orders not sent and not cancelled in the store)
 const needsBlank = it => { if (!it.is_tshirt || !it.product_type_id || !it.size || !it.color) return false;
-  const pr = stagesOf(it).find(s => s.stage_key === 'print'); return pr ? !pr.done_at : itemState(it).code !== 'ready'; };
+  const pr = stagesOf(it).find(s => s.stage_key === 'press'); return pr ? !pr.done_at : itemState(it).code !== 'ready'; };
 const pendingBlanks = () => D.orders.filter(o => !o.waybill_at && !o.cancelled_at).sort((a, b) => a.created_at < b.created_at ? -1 : 1)
   .flatMap(o => itemsOf(o).filter(needsBlank));
 // oldest orders get the blanks first; an item that does not fit waits for its size
