@@ -15,6 +15,8 @@
   let logged = false, num = 0, rt = null;
   const calls = { load: 0, syncSince: 0, loadOrders: 0, loadConfig: 0, loadAll: 0, bytes: 0 };
   const sent = v => { calls.bytes += JSON.stringify(v).length; return v; };
+  const num0 = v => v === '' || v == null ? null : Number(v);
+  const syncPrice = oid => { const l = db.items.filter(i => i.order_id === oid && i.price != null); if (l.length) db.orders.find(o => o.id === oid).price = l.reduce((a, i) => a + i.price * i.qty, 0); };
   const full = o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ ...i, item_stages: db.item_stages.filter(s => s.item_id === i.id) })) });
   // same rules as the database triggers: any change inside an order marks the order as changed
   const touch = (orderId, silent) => { const o = db.orders.find(x => x.id === orderId); if (!o) return; o.updated_at = now(); if (!silent && rt) setTimeout(() => rt.orders({ eventType: 'UPDATE', new: { ...o } }), 30); };
@@ -32,7 +34,7 @@
       const c = JSON.parse(JSON.stringify(db));
       return sent({ members: c.members, options: c.options, stageDefs: sd, types: c.product_types, typeStages: ts,
         tasks: c.tasks, notes: c.order_notes,
-        history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt })) })),
+        history: db.orders.map(o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ name: i.name, qty: i.qty, is_tshirt: i.is_tshirt, price: i.price })) })),
         orders: JSON.parse(JSON.stringify(db.orders.map(full))) });
     },
     async syncSince(iso) {
@@ -57,17 +59,19 @@
     async loadAll() { calls.loadAll++; return sent(JSON.parse(JSON.stringify(db.orders.map(full)))); },
     async saveItem(p) {
       let iid = p.id;
-      if (!iid) { iid = id(); db.items.push({ id: iid, order_id: p.order_id, product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, photo_at: null, sort: db.items.filter(i => i.order_id === p.order_id).length }); }
-      else { Object.assign(db.items.find(i => i.id === iid), { product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note }); if (p.reset_stages) db.item_stages = db.item_stages.filter(s => s.item_id !== iid); }
+      if (!iid) { iid = id(); db.items.push({ id: iid, order_id: p.order_id, product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price), photo_at: null, sort: db.items.filter(i => i.order_id === p.order_id).length }); }
+      else { Object.assign(db.items.find(i => i.id === iid), { product_type_id: p.product_type_id || null, name: p.name, is_tshirt: p.is_tshirt, size: p.size, color: p.color, qty: p.qty, custom_design: p.custom_design, note: p.note, price: num0(p.price) }); if (p.reset_stages) db.item_stages = db.item_stages.filter(s => s.item_id !== iid); }
       if (!p.id || p.reset_stages) p.stages.forEach((s, j) => db.item_stages.push({ id: id(), item_id: iid, stage_key: s.key, name: s.name, kind: s.kind, sort: j, done_at: null, done_by: null }));
+      syncPrice(p.order_id);
       touch(p.order_id, window.__silent);
       return iid;
     },
     async createOrder(p) {
       const o = { id: id(), num: ++num, customer: p.customer, phone: p.phone, recipient: p.recipient || '', address: p.address, price: p.price === '' || p.price == null ? null : Number(p.price), brand: p.brand, channel: p.channel, account: p.account, note: p.note, problem: '', urgent: p.urgent, due: p.due || null, needs_confirm: p.needs_confirm, confirmed_at: null, packed_at: null, waybill_at: null, tracking: '', created_by: user.id, created_at: now(), updated_at: now() };
       db.orders.push(o);
-      p.items.forEach((it, i) => { const iid = id(); db.items.push({ id: iid, order_id: o.id, product_type_id: it.product_type_id || null, name: it.name, is_tshirt: it.is_tshirt, size: it.size, color: it.color, qty: it.qty, custom_design: it.custom_design, note: it.note, photo_at: null, sort: i });
+      p.items.forEach((it, i) => { const iid = id(); db.items.push({ id: iid, order_id: o.id, product_type_id: it.product_type_id || null, name: it.name, is_tshirt: it.is_tshirt, size: it.size, color: it.color, qty: it.qty, custom_design: it.custom_design, note: it.note, price: num0(it.price), photo_at: null, sort: i });
         it.stages.forEach((s, j) => db.item_stages.push({ id: id(), item_id: iid, stage_key: s.key, name: s.name, kind: s.kind, sort: j, done_at: null, done_by: null })); });
+      syncPrice(o.id);
       if (rt && !window.__silent) setTimeout(() => rt.orders({ eventType: 'INSERT', new: { ...o } }), 30);
       return o.id;
     },

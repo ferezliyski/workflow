@@ -78,6 +78,10 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.danger{background:none;color:var(--bad);box-shadow:inset 0 0 0 1.5px var(--bad)}
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
+.cod{font-weight:800;font-size:16px}
+.cod:empty{display:none}
+#f-total{margin-top:12px}
+.iprice{font-size:13.5px;font-weight:700}
 .btn:disabled{opacity:.5}
 .link{appearance:none;background:none;border:0;padding:8px 2px;color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
 .chips{display:flex;flex-wrap:wrap;gap:8px}
@@ -316,7 +320,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1448';
+const VERSION = '20261118-1501';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -343,7 +347,7 @@ function realApi() {
         sb.from('orders').select('*, items(*, item_stages(*))').or(`waybill_at.is.null,waybill_at.gte.${since}`).order('created_at'),
         sb.from('tasks').select('*').order('created_at'),
         sb.from('order_notes').select('*').order('created_at'),
-        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt)').order('created_at')
+        sb.from('orders').select('id, num, customer, phone, price, brand, channel, account, created_at, waybill_at, tracking, items(name, qty, is_tshirt, price)').order('created_at')
       ]);
       return { members: ok(members), options: ok(options), stageDefs: ok(stageDefs), types: ok(types), typeStages: ok(typeStages), orders: ok(orders), tasks: ok(tasks), notes: ok(notes), history: ok(history) };
     },
@@ -454,6 +458,8 @@ const otherOrders = o => { const k = phoneKey(o.phone); return k ? D.history.fil
 const star = o => otherOrders(o).length ? '<span class="star" title="Поръчвал е и преди" aria-label="Поръчвал е и преди">★</span>' : '';
 const money = v => v == null || v === '' ? '' : `${Number(v).toFixed(2).replace('.', ',')} €`;
 const priceInput = v => v == null ? '' : String(v).replace('.', ',');
+const priceStr = v => { const n = parsePrice(v); return n == null ? '' : String(n); };
+const lineSum = it => it.price == null || it.price === '' ? null : Number(it.price) * (it.qty || 1);
 function parsePrice(v) {
   const t = String(v || '').trim().replace(/\s/g, '').replace(',', '.').replace(/[^\d.]/g, '');
   if (!t) return null;
@@ -579,6 +585,7 @@ function itemEditorHtml(o) {
       <option value="custom" ${d.typeId === 'custom' ? 'selected' : ''}>Друго</option></select>
     ${body}
     ${d.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="ie-qty" data-v="-1" aria-label="По-малко">−</button><b>${d.qty}</b><button type="button" data-act="ie-qty" data-v="1" aria-label="Повече">+</button></div>
+      <label class="lbl" for="ie-price">Цена за брой, €</label><input class="field" id="ie-price" inputmode="decimal" value="${e(d.price)}" autocomplete="off">
       <label class="lbl" for="ie-note">Бележка за продукта</label><input class="field" id="ie-note" value="${e(d.note)}" autocomplete="off">` : ''}
     ${reset ? '<p class="warn">Етапите на този продукт ще започнат отначало.</p>' : ''}
     <p class="err" role="alert">${e(IE.err || '')}</p>
@@ -590,7 +597,7 @@ function startItemEdit(orderId, itemId) {
   const o = findOrder(orderId), it = itemId && itemsOf(o).find(x => x.id === itemId);
   const draft = blankItem();
   if (it) {
-    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, custom: it.custom_design, note: it.note,
+    Object.assign(draft, { typeId: it.product_type_id || 'custom', name: it.name, size: it.size, color: it.color, qty: it.qty, price: priceInput(it.price), custom: it.custom_design, note: it.note,
       stages: stagesOf(it).map(x => ({ key: x.stage_key, name: x.name, kind: x.kind, sort: x.sort })) });
   }
   UI.itemEdit = { orderId, itemId: it ? it.id : null, draft, orig: it ? { typeId: draft.typeId, custom: draft.custom, stages: draft.stages.map(x => x.name).join('|') } : null, err: '' };
@@ -616,7 +623,7 @@ async function saveItemEdit() {
       id: IE.itemId || '', order_id: IE.orderId, product_type_id: d.typeId === 'custom' ? '' : d.typeId,
       name: d.typeId === 'custom' ? d.name.trim() : t.name, is_tshirt: !!(t && t.is_tshirt),
       size: t && t.is_tshirt ? d.size : '', color: t && t.is_tshirt ? d.color : '', qty: d.qty,
-      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), reset_stages: reset, stages: draftStages(d)
+      custom_design: !!(t && t.is_tshirt && d.custom), note: d.note.trim(), price: priceStr(d.price), reset_stages: reset, stages: draftStages(d)
     });
     UI.itemEdit = null;
     toast(IE.itemId ? 'Продуктът е променен' : 'Продуктът е добавен');
@@ -633,6 +640,7 @@ function bodyHtml(o) {
       <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
     if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
     return `<div class="item"><div class="item-h"><h3>${e(itemLabel(it))}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
+      ${it.price != null ? `<p class="iprice">${e(money(lineSum(it)))}</p>` : ''}
       ${it.custom_design ? '<p class="small muted">Дизайн по желание на клиента</p>' : ''}
       ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
       <div class="steps">${steps}${photo}</div></div>`;
@@ -655,8 +663,10 @@ function bodyHtml(o) {
     <div class="inline"><input class="field" id="rcp-${o.id}" data-field="recipient" data-id="${o.id}" value="${e(o.recipient || '')}" autocomplete="off"><button class="copy" data-act="copy" data-v="${e(shipName(o))}">Копирай</button></div>
     <label class="lbl" for="adr-${o.id}">Адрес за доставка</label>
     <input class="field" id="adr-${o.id}" data-field="address" data-id="${o.id}" value="${e(o.address)}" autocomplete="off">
-    <label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
-    <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">
+    ${itemsOf(o).some(it => it.price != null)
+      ? `<span class="lbl">Наложен платеж</span><p class="cod">${e(money(o.price))}</p>`
+      : `<label class="lbl" for="prc-${o.id}">Цена (наложен платеж), €</label>
+    <input class="field" id="prc-${o.id}" data-field="price" data-id="${o.id}" value="${e(priceInput(o.price))}" inputmode="decimal" autocomplete="off">`}
     ${o.note ? `<p class="small" style="margin-top:8px">${e(o.note)}</p>` : ''}
     ${o.needs_confirm ? `<div class="steps" style="margin-top:12px">${stepBtn('confirm', o.id, 'Клиентът потвърди по телефона', o.confirmed_at, o.confirmed_by, 'wait')}</div>` : ''}
     ${items}
@@ -1017,10 +1027,20 @@ function groupBy(list, keyFn) {
   list.forEach(o => { const k = keyFn(o); if (!k) return; const g = m.get(k) || { k, n: 0, sum: 0 }; g.n++; g.sum += Number(o.price) || 0; m.set(k, g); });
   return [...m.values()].map(g => Object.assign(g, { v: g.n })).sort((a, b) => b.n - a.n || b.sum - a.sum);
 }
-function storeKey(h) {
-  if (h.brand !== 'Meivi') return h.brand;
-  const its = h.items || [], t = its.some(i => i.is_tshirt), g = its.some(i => !i.is_tshirt);
-  return t && g ? 'Meivi смесени' : t ? 'Meivi тениски' : g ? 'Meivi подаръци' : 'Meivi';
+function storeRows(list) {
+  const m = new Map();
+  const add = (k, sum) => { if (!k) return; const g = m.get(k) || { k, n: 0, sum: 0 }; g.n++; g.sum += Number(sum) || 0; m.set(k, g); };
+  list.forEach(h => {
+    if (h.brand !== 'Meivi') return add(h.brand, h.price);
+    const its = h.items || [], tees = its.filter(i => i.is_tshirt), gifts = its.filter(i => !i.is_tshirt);
+    const sum = l => l.reduce((a, i) => a + (lineSum(i) || 0), 0);
+    if (tees.length && gifts.length) {
+      if (!its.some(i => i.price != null)) return add('Meivi смесени', h.price);
+      add('Meivi тениски', sum(tees)); return add('Meivi подаръци', sum(gifts));
+    }
+    add(tees.length ? 'Meivi тениски' : gifts.length ? 'Meivi подаръци' : 'Meivi', h.price);
+  });
+  return [...m.values()].map(g => Object.assign(g, { v: g.n })).sort((a, b) => b.n - a.n || b.sum - a.sum);
 }
 function viewStats() {
   const [from, to] = periodRange(UI.statsPeriod);
@@ -1055,7 +1075,7 @@ function viewStats() {
       ${tile('Повторни клиенти', String(repeat), list.length ? `${Math.round(repeat / list.length * 100)}% от поръчките` : '')}
     </div>
     ${list.length ? '' : '<p class="empty">Няма поръчки за този период.</p>'}
-    ${barList('По магазин', groupBy(list, storeKey), cnt)}
+    ${barList('По магазин', storeRows(list), cnt)}
     ${barList('По канал', groupBy(list, h => h.channel), cnt)}
     ${barList('TikTok акаунти на Meivi', groupBy(list.filter(h => h.brand === 'Meivi' && h.channel === 'TikTok'), h => h.account || 'Без акаунт'), cnt)}
     ${barList('Продукти (бройки)', prods, r => `${r.v} бр.`)}
@@ -1431,7 +1451,7 @@ function render() {
 }
 
 /* ---------- new order form ---------- */
-const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, custom: false, note: '', stages: [], extra: '' });
+const blankItem = () => ({ typeId: '', name: '', size: '', color: '', qty: 1, price: '', custom: false, note: '', stages: [], extra: '' });
 function phoneHint(phone) {
   const k = phoneKey(phone);
   const list = k ? D.history.filter(h => phoneKey(h.phone) === k).sort((a, b) => b.num - a.num) : [];
@@ -1472,6 +1492,7 @@ function editorHtml() {
       <option value="custom" ${it.typeId === 'custom' ? 'selected' : ''}>Друго (нова задача)</option></select>
     ${body}
     ${it.typeId ? `<span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div>
+      <label class="lbl" for="f-iprice">Цена за брой, €</label><input class="field" id="f-iprice" inputmode="decimal" value="${e(it.price)}" autocomplete="off">
       <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" autocomplete="off">
       <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>` : ''}
   </div>`;
@@ -1493,13 +1514,13 @@ function renderForm() {
     <p class="small phone-hint" id="f-phone-hint">${phoneHint(F.phone)}</p>
     <label class="lbl" for="f-recipient">Име за доставка</label><input class="field" id="f-recipient" value="${e(F.recipient)}" autocomplete="off">
     <label class="lbl" for="f-address">Адрес за доставка</label><textarea class="field" id="f-address" rows="2" autocomplete="off">${e(F.address)}</textarea>
-    <label class="lbl" for="f-price">Цена (наложен платеж), €</label><input class="field" id="f-price" inputmode="decimal" value="${e(F.price)}" autocomplete="off">
     <span class="lbl">Марка</span>${pick('f-brand', 'brand', F.brand)}
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
     <span class="lbl">Продукти</span>
-    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ name: it.name, qty: it.qty, size: it.size, color: it.color }))}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
+    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ name: it.name, qty: it.qty, size: it.size, color: it.color }))}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
     ${editorHtml()}
+    <p class="cod" id="f-total">${e(formTotal())}</p>
     <label class="lbl" for="f-due">Срок (по желание)</label><input class="field" id="f-due" type="date" value="${e(F.due)}">
     <label class="check"><input type="checkbox" id="f-urgent" ${F.urgent ? 'checked' : ''}>Спешна поръчка</label>
     <label class="check"><input type="checkbox" id="f-confirm" ${confirm ? 'checked' : ''}>Звъним на клиента за потвърждение</label>
@@ -1511,6 +1532,10 @@ function renderForm() {
   box.scrollTop = keepY;
   const err = box.querySelector('.err');
   if (F.err && err) err.scrollIntoView({ block: 'center' });
+}
+function formTotal() {
+  const all = F.items.concat(F.edit.typeId ? [F.edit] : []).filter(it => parsePrice(it.price) != null);
+  return all.length ? 'Наложен платеж: ' + money(all.reduce((a, it) => a + parsePrice(it.price) * it.qty, 0)) : '';
 }
 function addDraft() {
   const it = F.edit, t = typeOf(it.typeId);
@@ -1532,13 +1557,13 @@ async function saveOrder() {
   F.busy = true; F.err = ''; renderForm();
   try {
     await api.createOrder({
-      customer: F.customer.trim(), phone: F.phone.trim(), recipient: F.recipient.trim(), address: F.address.trim(), price: parsePrice(F.price) == null ? '' : String(parsePrice(F.price)), brand: F.brand, channel: F.channel,
+      customer: F.customer.trim(), phone: F.phone.trim(), recipient: F.recipient.trim(), address: F.address.trim(), price: '', brand: F.brand, channel: F.channel,
       account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
       note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
       items: F.items.map(it => ({
         product_type_id: it.typeId === 'custom' ? '' : it.typeId, name: it.name.trim(),
         is_tshirt: !!(typeOf(it.typeId) || {}).is_tshirt, size: it.size, color: it.color, qty: it.qty,
-        custom_design: it.custom, note: it.note.trim(), stages: draftStages(it)
+        custom_design: it.custom, note: it.note.trim(), price: priceStr(it.price), stages: draftStages(it)
       }))
     });
     F = null; renderForm(); UI.tab = 'orders'; UI.filter = 'all';
@@ -1555,7 +1580,7 @@ let lastSync = 0, pendingRedraw = false;
 const RECENT_MS = 30 * 864e5;
 const keepInList = o => !o.waybill_at || Date.now() - new Date(o.waybill_at).getTime() < RECENT_MS;
 const lightOf = o => ({ id: o.id, num: o.num, customer: o.customer, phone: o.phone, price: o.price, brand: o.brand, channel: o.channel,
-  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty, is_tshirt: it.is_tshirt })) });
+  account: o.account, created_at: o.created_at, waybill_at: o.waybill_at, tracking: o.tracking, items: (o.items || []).map(it => ({ name: it.name, qty: it.qty, is_tshirt: it.is_tshirt, price: it.price })) });
 function upsert(list, row, key = 'id') { const i = list.findIndex(x => x[key] === row[key]); if (i >= 0) list[i] = row; else list.push(row); }
 function mergeOrder(o) {
   if (keepInList(o)) upsert(D.orders, o); else D.orders = D.orders.filter(x => x.id !== o.id);
@@ -1953,7 +1978,7 @@ document.addEventListener('input', ev => {
     }
   }
   if (UI.itemEdit) {
-    const k = { 'ie-name': 'name', 'ie-note': 'note', 'ie-extra': 'extra' }[t.id];
+    const k = { 'ie-name': 'name', 'ie-note': 'note', 'ie-extra': 'extra', 'ie-price': 'price' }[t.id];
     if (k) { UI.itemEdit.draft[k] = t.value; return; }
   }
   if (t.id === 'q') { UI.q = t.value; return updateResults(); }
@@ -1967,6 +1992,7 @@ document.addEventListener('input', ev => {
   if (t.id === 'f-phone') { const h = $('#f-phone-hint'); if (h) h.innerHTML = phoneHint(t.value); }
   else if (t.id === 'f-name') F.edit.name = t.value;
   else if (t.id === 'f-inote') F.edit.note = t.value;
+  else if (t.id === 'f-iprice') { F.edit.price = t.value; const ft = $('#f-total'); if (ft) ft.textContent = formTotal(); }
   else if (t.id === 'f-extra') F.edit.extra = t.value;
 });
 document.addEventListener('change', ev => {
@@ -1976,7 +2002,7 @@ document.addEventListener('change', ev => {
   if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
   if (UI.itemEdit) {
-    if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
+    if (t.id === 'ie-type') { const d = UI.itemEdit.draft, keep = { qty: d.qty, note: d.note, price: d.price }; UI.itemEdit.draft = Object.assign(blankItem(), keep, { typeId: t.value }); UI.itemEdit.err = ''; return renderPop(); }
     if (t.id === 'ie-custom') { UI.itemEdit.draft.custom = t.checked; return renderPop(); }
     if (/^ie-/.test(t.id)) return;
   }

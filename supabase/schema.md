@@ -18,7 +18,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - packing: packed_at/by
   - completion: waybill_at/by (= "Завършена"), tracking
   - record: created_by, created_at, updated_at
-- **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, custom_design, note, photo_at/by (= on photo shoot), sort, created_at
+- **items**: id, order_id, product_type_id, name, is_tshirt, size, color, qty, price (per piece; null on old orders), custom_design, note, photo_at/by (= on photo shoot), sort, created_at
 - **item_stages**: id, item_id, stage_key, name, kind, sort, done_at/by. Each item gets its own copy of its stages.
 - **order_notes**: id, order_id, body, author, created_at
 - **tasks**: id, title, note, due, urgent, assignee, created_by, order_id, done_at/by, created_at, updated_at
@@ -43,6 +43,7 @@ Snapshot of the live schema on 2026-11-18. The live database is the source of tr
   - `private.check_signup` rejects a sign-up unless its `invite_code` metadata (digits only) matches private.settings. It also auto-confirms the email.
   - `private.add_member` inserts the new person into members.
 - `updated_at`: kept up to date on orders, tasks and leaves.
+- `items_sync_order_price` (`private.sync_order_price`): when an order has items with a price, `orders.price` (cash on delivery) = sum of price × qty. Delivery is not included. Orders whose items have no price keep the total typed by hand.
 - Change stamps on the order: any change to items, item_stages or order_notes also bumps `orders.updated_at`. Incremental sync relies on this.
 
 ## Functions (RPC)
