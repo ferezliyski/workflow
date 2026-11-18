@@ -18,7 +18,7 @@
   /* Layout: one phone column, bottom tab bar, order cards with a contrasting header band; details open as a popup.
      Palette: white, black and red, one step softer than pure so it stays lively without glaring. */
   --bg:#F0EFEC; --surface:#FFFFFF; --ink:#161616; --soft:#5F5D59; --line:#D2CFCA;
-  --accent:#CB2B32; --on-accent:#FFFFFF; --tint:#EDEBE7;
+  --accent:#CB2B32; --on-accent:#FFFFFF; --tint:#EDEBE7; --blue:#1E5FC2;
   --band:#1A1A1A; --on-band:#F7F5F1;
   --bad:#B3222A; --bad-tint:#F9E3E3;
   --next:#2E9A55; --photo:#C99A06;
@@ -28,7 +28,7 @@
 @media (prefers-color-scheme:dark){
   :root:not([data-theme="light"]){
     --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
-    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
+    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727; --blue:#6EA6FF;
     --band:#ECE9E4; --on-band:#151515;
     --bad:#F58388; --bad-tint:#3A1B1C;
     --next:#4CC174; --photo:#F2C230;
@@ -37,7 +37,7 @@
 }
 :root[data-theme="dark"]{
     --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
-    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
+    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727; --blue:#6EA6FF;
     --band:#ECE9E4; --on-band:#151515;
     --bad:#F58388; --bad-tint:#3A1B1C;
     --next:#4CC174; --photo:#F2C230;
@@ -78,6 +78,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn.danger{background:none;color:var(--bad);box-shadow:inset 0 0 0 1.5px var(--bad)}
 .btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
+.pn{color:var(--blue)}
 .cod{font-weight:800;font-size:16px}
 .cod:empty{display:none}
 #f-total{margin-top:12px}
@@ -481,6 +482,8 @@ const activeOrders = () => D.orders.filter(o => !o.waybill_at).sort((a, b) =>
   (b.urgent - a.urgent) || ((a.due || '9999') < (b.due || '9999') ? -1 : (a.due || '9999') > (b.due || '9999') ? 1 : 0) || (a.created_at < b.created_at ? -1 : 1));
 const catOf = it => { if (!it.design) return ''; const n = it.design.replace(/ \((дамска|мъжка)\)$/, ''); const d = (D.designs || []).find(x => x.name === n); return d ? d.category : ''; };
 const itemLabel = it => [catOf(it), it.design, it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, it.size, it.color].filter(Boolean).join(' · ');
+// same text as itemLabel, with the name of the product (the design, or the product itself when there is no design) in blue
+const itemLabelHtml = it => { const nm = it.qty > 1 ? `${it.qty}× ${it.name}` : it.name, b = v => `<span class="pn">${e(v)}</span>`; return [catOf(it) && e(catOf(it)), it.design && b(it.design), it.design ? e(nm) : b(nm), it.size && e(it.size), it.color && e(it.color)].filter(Boolean).join(' · '); };
 const designsOf = typeId => (D.designs || []).filter(x => x.active !== false && x.kind === 'single' && x.product_type_id === typeId);
 const designPick = (id, typeId, cur) => { const l = designsOf(typeId); return l.length ? `<label class="lbl" for="${id}">Дизайн</label><select class="field" id="${id}"><option value="">—</option>${cur && !l.some(x => x.name === cur) ? `<option selected>${e(cur)}</option>` : ''}${[...new Set(l.map(x => x.category || ''))].sort((a, b) => a.localeCompare(b, 'bg')).map(c => `<optgroup label="${e(c || 'Други')}">${l.filter(x => (x.category || '') === c).map(x => `<option ${x.name === cur ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</optgroup>`).join('')}</select>` : ''; };
 
@@ -535,7 +538,7 @@ function cardHtml(o) {
     else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
     else if (st.code === 'ready') action = allReady ? '' : '<p class="ready waiting">✓ Готов</p>';
     else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
-    return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
+    return `<div class="prod"><p class="prod-name"><span>${itemLabelHtml(it)}</span>${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
   }).join('');
   let orderRow = '';
   if (done) orderRow = `<p class="ready">✓ Завършена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
@@ -635,7 +638,7 @@ function bodyHtml(o) {
     const photo = `<button class="step photo ${it.photo_at ? 'on' : ''}" data-act="photo" data-id="${it.id}" aria-pressed="${!!it.photo_at}">
       <b>${it.photo_at ? 'Върната от снимане' : 'Изпрати за снимане'}</b>${it.photo_at ? `<small>на снимане от ${e(day(it.photo_at))}</small>` : ''}</button>`;
     if (UI.itemEdit && UI.itemEdit.itemId === it.id) return `<div class="item">${itemEditorHtml(o)}</div>`;
-    return `<div class="item"><div class="item-h"><h3>${e(itemLabel(it))}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
+    return `<div class="item"><div class="item-h"><h3>${itemLabelHtml(it)}</h3><button class="link" data-act="ie-open" data-order="${o.id}" data-id="${it.id}">Промени</button></div>
       ${it.price != null ? `<p class="iprice">${e(money(lineSum(it)))}</p>` : ''}
       ${it.custom_design ? '<p class="small muted">Дизайн по желание на клиента</p>' : ''}
       ${it.note ? `<p class="small">${e(it.note)}</p>` : ''}
@@ -1514,7 +1517,7 @@ function renderForm() {
     <span class="lbl">Канал</span>${pick('f-channel', 'channel', F.channel)}
     ${F.brand === 'Meivi' && F.channel === 'TikTok' ? `<span class="lbl">TikTok акаунт</span>${pick('f-account', 'account', F.account)}` : ''}
     <span class="lbl">Продукти</span>
-    ${F.items.map((it, i) => `<div class="draft"><span>${e(itemLabel({ design: it.design, name: it.name, qty: it.qty, size: it.size, color: it.color }))}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
+    ${F.items.map((it, i) => `<div class="draft"><span>${itemLabelHtml(it)}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
     ${editorHtml()}
     <p class="cod" id="f-total">${e(formTotal())}</p>
     <label class="lbl" for="f-due">Срок (по желание)</label><input class="field" id="f-due" type="date" value="${e(F.due)}">
