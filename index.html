@@ -4,11 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <meta name="color-scheme" content="light dark">
-<meta name="theme-color" content="#101010">
+<meta name="theme-color" content="#101010" id="theme-color">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Workflow">
 <title>Workflow поръчки</title>
+<script>
+  // apply the saved theme before anything is drawn, so the screen does not flash
+  try { const t = localStorage.getItem('wf-theme'); if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t); } catch (x) { /* optional */ }
+</script>
 <style>
 :root{
   /* Layout: one phone column, bottom tab bar, order cards with a contrasting header band; details open as a popup.
@@ -22,7 +26,7 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root{
+  :root:not([data-theme="light"]){
     --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
     --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
     --band:#ECE9E4; --on-band:#151515;
@@ -30,6 +34,14 @@
     --next:#4CC174; --photo:#F2C230;
     color-scheme:dark;
   }
+}
+:root[data-theme="dark"]{
+    --bg:#101010; --surface:#1C1C1C; --ink:#F0EEEA; --soft:#A9A6A0; --line:#383736;
+    --accent:#D8373E; --on-accent:#FFFFFF; --tint:#282727;
+    --band:#ECE9E4; --on-band:#151515;
+    --bad:#F58388; --bad-tint:#3A1B1C;
+    --next:#4CC174; --photo:#F2C230;
+    color-scheme:dark;
 }
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
@@ -90,6 +102,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .dots{display:inline-flex;gap:4px;flex:none}
 .dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--soft)}
 .dots i.on{background:var(--ink);border-color:var(--ink)}
+.dots.waiting i.on{background:var(--next);border-color:var(--next)}
 .now{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
 .now-txt{display:flex;flex-direction:column;line-height:1.2}
 .now-txt span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
@@ -264,7 +277,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0742';
+const VERSION = '20261118-0748';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -354,6 +367,18 @@ const e = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp
 const day = d => d ? new Date(d).toLocaleDateString('bg-BG', { day: 'numeric', month: 'short' }) : '';
 const nameOf = id => (D.members.find(m => m.user_id === id) || {}).name || '';
 const opts = kind => D.options.filter(o => o.kind === kind);
+function themeNow() { try { return localStorage.getItem('wf-theme') || 'auto'; } catch (x) { return 'auto'; } }
+function setTheme(t) {
+  try { if (t === 'auto') localStorage.removeItem('wf-theme'); else localStorage.setItem('wf-theme', t); } catch (x) { /* optional */ }
+  if (t === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const dark = t === 'dark' || (t === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+  const m = document.getElementById('theme-color'); if (m) m.setAttribute('content', dark ? '#101010' : '#F0EFEC');
+}
+function themeRow() {
+  const cur = themeNow();
+  const c = (v, l) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`;
+  return `<section class="block" style="margin-top:14px"><h2><span>Тема</span></h2><div class="seg" style="margin:10px 0 0">${c('auto', 'Като телефона')}${c('light', 'Светла')}${c('dark', 'Тъмна')}</div></section>`;
+}
 const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
 const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
 const notesOf = id => D.notes.filter(n => n.order_id === id);
@@ -422,8 +447,8 @@ function nowRow(label, kind, act, id, btn) {
   return `<div class="now"><p class="now-txt"><span>${kind === 'wait' ? 'Чака' : 'За'}</span><b>${e(label)}</b></p>
     <button class="go ${kind === 'wait' ? 'wait' : ''}" data-act="${act}" data-id="${id}">${e(btn)}</button></div>`;
 }
-function dots(it) {
-  return `<span class="dots" aria-hidden="true">${stagesOf(it).map(s => `<i class="${s.done_at ? 'on' : ''}"></i>`).join('')}</span>`;
+function dots(it, waiting) {
+  return `<span class="dots ${waiting ? 'waiting' : ''}" aria-hidden="true">${stagesOf(it).map(s => `<i class="${s.done_at ? 'on' : ''}"></i>`).join('')}</span>`;
 }
 function cardHtml(o) {
   const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ');
@@ -444,7 +469,7 @@ function cardHtml(o) {
     else if (st.code === 'photo') action = nowRow('На снимане', 'wait', 'photo', it.id, 'Върната');
     else if (st.code === 'ready') action = allReady ? '' : '<p class="ready waiting">✓ Готов</p>';
     else action = nowRow(next.name, next.kind, 'stage', next.id, next.kind === 'wait' ? 'Одобри' : 'Напред');
-    return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
+    return `<div class="prod"><p class="prod-name">${e(itemLabel(it))}${dots(it, !done && !unconfirmed(o) && st.code === 'ready' && !allReady)}</p>${it.note ? `<p class="small muted">${e(it.note)}</p>` : ''}${action}</div>`;
   }).join('');
   let orderRow = '';
   if (done) orderRow = `<p class="ready">✓ Изпратена${o.tracking ? ' · ' + e(o.tracking) : ''}</p>`;
@@ -1155,7 +1180,7 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const settingsBtn = `<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const settingsBtn = `${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1593,6 +1618,7 @@ document.addEventListener('click', async ev => {
     }
     case 'work-period': UI.workPeriod = v; return loadWork();
     case 'work-person': UI.workPerson = id; return renderPop();
+    case 'theme': setTheme(v); return render();
     case 'stats-period': UI.statsPeriod = v; return render();
     case 'person': UI.person = id || null; UI.showDone = false; render(); return window.scrollTo(0, 0);
     case 'show-done': UI.showDone = !UI.showDone; return render();
@@ -1788,6 +1814,7 @@ async function start() {
 checkVersion();
 setInterval(checkVersion, 5 * 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) checkVersion(); });
+setTheme(themeNow());
 (async () => {
   try { me = await api.session(); } catch (x) { me = null; }
   if (me) start(); else render();
