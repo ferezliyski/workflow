@@ -337,7 +337,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1746';
+const VERSION = '20261118-1750';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -825,10 +825,11 @@ function renderPop() {
 const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
 const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
 // Stock of blanks. D.stock = rows { product_type_id, size, color, qty } (qty = what is on the shelf).
-// A product type is "counted" once it has been loaded at least once; only counted types can make orders wait for a size.
+// Stock starts at 0 for every t-shirt type.
 const stockKey = (t, sz, c) => `${t}|${sz}|${c}`;
 const stockQty = (t, sz, c) => { const r = (D.stock || []).find(x => x.product_type_id === t && x.size === sz && x.color === c); return r ? r.qty : 0; };
-const stockCounted = t => (D.stock || []).some(x => x.product_type_id === t && x.loaded);
+// every t-shirt type is counted from 0 (owner, 18.11): with nothing loaded, all orders wait for a size
+const stockCounted = t => !!(D.types.find(x => x.id === t) || {}).is_tshirt;
 // a t-shirt still needs a blank while its "Щамповане" is not done (the print is DTF film, the shirt is used at the press) (orders not sent and not cancelled in the store)
 const needsBlank = it => { if (!it.is_tshirt || !it.product_type_id || !it.size || !it.color) return false;
   const pr = stagesOf(it).find(s => s.stage_key === 'press'); return pr ? !pr.done_at : itemState(it).code !== 'ready'; };
@@ -1052,7 +1053,6 @@ function viewStock() {
   const ordered = {};
   pendingBlanks().forEach(it => { const k = stockKey(it.product_type_id, it.size, it.color); ordered[k] = (ordered[k] || 0) + it.qty; });
   const blocks = tees.map(t => {
-    // until the first load of a product, its cells are not marked as low
     const counted = stockCounted(t.id);
     const have = t.sizes.reduce((a, sz) => a + t.colors.reduce((b, c) => b + stockQty(t.id, sz, c), 0), 0);
     const rows = t.colors.map(c => {

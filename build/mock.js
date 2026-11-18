@@ -18,6 +18,8 @@
   const num0 = v => v === '' || v == null ? null : Number(v);
   const syncPrice = oid => { const l = db.items.filter(i => i.order_id === oid && i.price != null); if (l.length) db.orders.find(o => o.id === oid).price = l.reduce((a, i) => a + i.price * i.qty, 0); };
   let mv = 0;
+  // tests start with plenty of blanks of every kind, so orders do not wait for sizes (window.__noStock = start empty)
+  if (!window.__noStock) types.filter(t => t.is_tshirt).forEach(t => t.sizes.forEach(sz => t.colors.forEach(c => db.stock_moves.push({ id: ++mv, product_type_id: t.id, size: sz, color: c, delta: 999, kind: 'load', created_at: now() }))));
   const levels = () => { const m = new Map(); db.stock_moves.forEach(x => { const k = x.product_type_id + '|' + x.size + '|' + x.color; const r = m.get(k) || { product_type_id: x.product_type_id, size: x.size, color: x.color, qty: 0, loaded: false }; r.qty += x.delta; r.loaded = r.loaded || x.kind === 'load'; m.set(k, r); }); return [...m.values()]; };
   const full = o => ({ ...o, items: db.items.filter(i => i.order_id === o.id).map(i => ({ ...i, item_stages: db.item_stages.filter(s => s.item_id === i.id) })) });
   // same rules as the database triggers: any change inside an order marks the order as changed
@@ -87,7 +89,7 @@
         if (it && it.is_tshirt && it.product_type_id && it.size && it.color) {
           const taken = -db.stock_moves.filter(m => m.item_id === it.id && m.kind === 'press').reduce((x, m) => x + m.delta, 0);
           const loaded = db.stock_moves.some(m => m.product_type_id === it.product_type_id && m.kind === 'load');
-          const delta = row.done_at ? (loaded ? -it.qty : 0) : taken;
+          const delta = row.done_at ? -it.qty : taken;
           if (delta) db.stock_moves.push({ id: ++mv, product_type_id: it.product_type_id, size: it.size, color: it.color, delta, kind: 'press', item_id: it.id, created_at: now() }); } }
       if (t === 'tasks') { row.updated_at = now(); if (rt && !window.__silent) setTimeout(() => rt.tasks({ eventType: 'UPDATE', new: { ...row } }), 30); }
       const oid = orderOf(t, row); if (oid) touch(oid, window.__silent);

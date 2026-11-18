@@ -83,9 +83,9 @@ Open phones reload themselves. They compare `version.txt` with their own version
 - **Stock (Наличности)**, Profile → "Наличности" (replaced the manual "Липсващи размери" on 18.11.2026):
   - Blanks per product type × size × colour (all t-shirt types and hoodies; Slash and Meivi oversize are different blanks). Started at 0; the team loads what they have.
   - "Зареждане" adds a grid of numbers; "Брак" takes out one size/colour; the last loads/scraps can be taken back ("Махни").
-  - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Щамповане" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red (only after the type's first load).
+  - Table per type: Налични (on the shelf), Поръчани (t-shirts in open orders whose "Щамповане" is not done; sent and cancelled orders do not count), След (= Налични − Поръчани). След under 5 is yellow, below 0 red.
   - Doing "Щамповане" takes the blank off the shelf ("Печат" is DTF film, not on the shirt); undoing it puts it back.
-  - Missing sizes are automatic: oldest orders get the blanks first; an order whose not-yet-pressed t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Only for types that have been loaded.
+  - Missing sizes are automatic: oldest orders get the blanks first; an order whose not-yet-pressed t-shirt has no blank left goes behind "⚠ Чакат размер (n)" and comes back by itself after a load. Every type is counted from 0, so before the first load all t-shirt orders wait (owner's choice).
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
   2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):
