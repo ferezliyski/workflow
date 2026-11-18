@@ -102,7 +102,6 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .dots{display:inline-flex;gap:4px;flex:none}
 .dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--soft)}
 .dots i.on{background:var(--ink);border-color:var(--ink)}
-.dots.waiting i.on{background:var(--next);border-color:var(--next)}
 .now{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:8px}
 .now-txt{display:flex;flex-direction:column;line-height:1.2}
 .now-txt span{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--soft)}
@@ -137,6 +136,10 @@ a{color:var(--ink)}
 .hol{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .lv-field{flex:1;min-width:0}
 .lv-count{margin-top:8px;font-weight:700}
+.theme-row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 2px 4px;font-size:13px;color:var(--soft)}
+.tchips{display:inline-flex;padding:2px;border-radius:999px;border:1px solid var(--line);background:var(--surface)}
+.tchip{appearance:none;min-height:28px;padding:0 10px;border:0;border-radius:999px;background:none;color:var(--soft);font-size:12px;font-weight:700}
+.tchip[aria-pressed="true"]{background:var(--ink);color:var(--bg)}
 .star{margin-left:5px;color:#E0A100}
 .prev{margin-top:12px;padding:10px 12px;border-radius:10px;background:var(--tint)}
 .prev-h{font-size:12.5px;font-weight:800;color:var(--soft)}
@@ -277,7 +280,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-0748';
+const VERSION = '20261118-0750';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -376,8 +379,8 @@ function setTheme(t) {
 }
 function themeRow() {
   const cur = themeNow();
-  const c = (v, l) => `<button class="chip" data-act="theme" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`;
-  return `<section class="block" style="margin-top:14px"><h2><span>Тема</span></h2><div class="seg" style="margin:10px 0 0">${c('auto', 'Като телефона')}${c('light', 'Светла')}${c('dark', 'Тъмна')}</div></section>`;
+  const c = (v, l) => `<button class="tchip" data-act="theme" data-v="${v}" aria-pressed="${cur === v}">${l}</button>`;
+  return `<div class="theme-row"><span>Тема</span><span class="tchips">${c('auto', 'Авто')}${c('light', 'Светла')}${c('dark', 'Тъмна')}</span></div>`;
 }
 const isAdmin = () => !!(me && (D.members.find(m => m.user_id === me.id) || {}).is_admin);
 const when = d => d ? `${day(d)} ${new Date(d).toLocaleTimeString('bg-BG', { hour: '2-digit', minute: '2-digit' })}` : '';
