@@ -76,6 +76,7 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .btn{appearance:none;min-height:46px;padding:0 16px;font-size:14.5px;font-weight:700;border:0;border-radius:10px;background:var(--accent);color:var(--on-accent)}
 .btn.ghost{background:none;color:var(--ink);box-shadow:inset 0 0 0 1.5px var(--line)}
 .btn.danger{background:none;color:var(--bad);box-shadow:inset 0 0 0 1.5px var(--bad)}
+.btn.dark{background:var(--ink);color:var(--surface)}
 .btn.wide{width:100%}
 .btn:disabled{opacity:.5}
 .link{appearance:none;background:none;border:0;padding:8px 2px;color:var(--ink);font-weight:700;text-decoration:underline;text-underline-offset:3px}
@@ -315,7 +316,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1300';
+const VERSION = '20261118-1321';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -1339,8 +1340,8 @@ function viewProfile() {
     }).join('');
     return `<div class="top"><h1>Профил</h1><span>${e(nameOf(me.id))}</span></div>
       <section class="group"><h2>Екип</h2>${rows}</section>
-      <div class="actions" style="margin-top:6px"><button class="btn" data-act="tab" data-v="stats" style="flex:1">Статистика</button><button class="btn" data-act="tab" data-v="work" style="flex:1">Работа по хора</button></div>
-      <button class="btn wide" data-act="tab" data-v="leave" style="margin-top:8px">Отпуски</button>
+      <div class="actions" style="margin-top:6px"><button class="btn dark" data-act="tab" data-v="stats" style="flex:1">Статистика</button><button class="btn dark" data-act="tab" data-v="work" style="flex:1">Работа по хора</button></div>
+      <button class="btn dark wide" data-act="tab" data-v="leave" style="margin-top:8px">Отпуски</button>
       ${settingsBtn}`;
   }
   const uid = admin ? UI.person : me.id;
