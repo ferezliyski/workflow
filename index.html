@@ -253,6 +253,8 @@ button.prev-row{text-decoration:underline;text-underline-offset:3px;text-decorat
 .tbadge{display:inline-grid;place-items:center;min-width:18px;height:18px;margin-left:5px;padding:0 5px;border-radius:9px;background:var(--accent);color:var(--on-accent);font-size:11px;font-weight:800;vertical-align:1px}
 .notes{border-top:1px solid var(--line)}
 .note{padding:8px 0;border-bottom:1px solid var(--line)}
+.note-x{float:right;appearance:none;border:0;background:none;color:var(--soft);font-size:14px;font-weight:700;min-width:32px;min-height:28px;padding:0 4px;margin:-4px -4px 0 8px}
+.note-x.armed{color:var(--accent)}
 .note b{font-size:13px}
 .note time{margin-left:8px;font-size:12px;color:var(--soft)}
 .note p{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere}
@@ -353,7 +355,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-2043';
+const VERSION = '20261118-2046';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -767,7 +769,7 @@ function bodyHtml(o) {
       : `<div class="actions send"><button class="btn" data-act="send" data-id="${o.id}">Изпрати</button><button class="btn ghost" data-act="send" data-v="quiet" data-id="${o.id}">Изпрати без съобщение</button></div>
          ${o.phone ? '' : '<p class="small muted" style="margin-top:6px">Няма телефон за Viber.</p>'}`}
     <span class="lbl">Бележки</span>
-    <div class="notes">${notesOf(o.id).map(n => `<div class="note"><b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
+    <div class="notes">${notesOf(o.id).map(n => `<div class="note">${n.author === me.id || isAdmin() ? `<button class="note-x${UI.armed === 'note:' + n.id ? ' armed' : ''}" data-act="note-del" data-id="${n.id}" aria-label="Изтрий бележката">${UI.armed === 'note:' + n.id ? 'Изтрий' : '✕'}</button>` : ''}<b>${e(nameOf(n.author) || '—')}</b><time>${e(when(n.created_at))}</time><p>${e(n.body)}</p></div>`).join('') || '<p class="small muted">Няма бележки.</p>'}</div>
     <div class="inline" style="margin-top:10px"><textarea class="field" id="nt-${o.id}" rows="1" autocomplete="off"></textarea><button class="btn" data-act="note-add" data-id="${o.id}">Добави</button></div>
     <div class="actions">
       <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
@@ -2055,7 +2057,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del' && a !== 'note-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
@@ -2175,6 +2177,10 @@ document.addEventListener('click', async ev => {
       if (UI.armed !== 'task:' + id) { UI.armed = 'task:' + id; return renderPop(); }
       UI.armed = null; UI.task = null;
       return act(() => api.remove('tasks', id), { dropTask: id });
+    case 'note-del':
+      if (UI.armed !== 'note:' + id) { UI.armed = 'note:' + id; return render(); }
+      UI.armed = null; D.notes = D.notes.filter(n => n.id !== id);
+      return act(() => api.remove('order_notes', id));
     case 'note-add': {
       const f = $(`#nt-${id}`), body = f ? f.value.trim() : '';
       if (!body) return;

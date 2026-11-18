@@ -82,6 +82,7 @@ This file continues the work from an earlier chat with Claude. Read it together 
     - Waiting for the owner: add the webhooks in Shopify and the secret in Supabase (see CLAUDE.md → Roadmap).
 18. **18.11, later:** Slash sync live; stock (Наличности), Returns and Материали tabs (see CLAUDE.md → Business rules).
 19. **18.11, "Платена" button** in the order (version 20261118-2043): a centred window asks "Само поръчката" or "Поръчката и доставката" (or "Откажи"); cash on delivery then shows 0 € with that text.
+20. **18.11, notes:** small ✕ next to each note deletes it (version 20261118-2046).
 
 ## Still to do (in the owner's order)
 

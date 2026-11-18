@@ -103,7 +103,7 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - search across all fields;
   - filters: stage, store, product, urgent, late;
   - repeat-customer ★;
-  - order notes;
+  - order notes; a small ✕ deletes one (tap twice: ✕ → "Изтрий"); shown on your own notes, and on all notes for the admin (same as the database rule);
   - copy buttons for name, address and phone;
   - Viber button next to the phone number;
   - price per product (typed by hand, per piece); cash on delivery = the sum, without delivery;
