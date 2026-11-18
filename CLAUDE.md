@@ -87,8 +87,9 @@ Open phones reload themselves. They compare `version.txt` with their own version
   - Pressing "Заредихме" removes the entry and the orders come back.
 - **End of the flow:**
   1. All products are made, then "Опаковано" (`packed_at`). The order moves to the **Готови** tab, section "За изпращане".
-  2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft:
-     `Здравейте, това е номера на Вашата пратка <номер>. Скоро ще бъде при вас.\nБлагодарим ви!`
+  2. Type the waybill number, then press **Изпрати**. This sets `waybill_at` (= "Завършена") and opens Viber with this draft (brand = Slash or Meivi):
+     `Здравейте, Вашата поръчка от <brand> е изпратена.\nНомер на пратката: <номер>\nБлагодарим ви!`
+     **Изпрати без съобщение** does the same without Viber; the waybill number is optional there.
      The link is `viber://chat?number=%2B359…&draft=…`; `intlPhone` turns 0… into +359…. On a computer the message is also copied to the clipboard.
   3. "Върни" undoes it. Finished orders from the last 30 days are listed in Готови.
 - **Known issue:** Opera on Mac quits when a page opens `viber://`. That is an Opera bug. The owner chose to keep opening Viber anyway and uses Safari.
