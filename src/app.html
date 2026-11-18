@@ -511,8 +511,17 @@ function designTyped(t) {
 }
 const designMissing = d => !d.custom && !d.design && String(d.dq || '').trim() ? 'Избери дизайн от списъка.' : '';
 document.addEventListener('focusin', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) { const pre = t.id.split('-')[0], d = designDraft(pre), box = $('#' + pre + '-dl'); if (d && box) { box.innerHTML = designList(pre, d.typeId, d.design ? '' : t.value);
-  // the phone keyboard would cover the list: bring the field to the top so the list stays visible above the keyboard
-  setTimeout(() => { const lb = t.previousElementSibling; if (document.activeElement === t) (lb || t).scrollIntoView({ block: 'start', behavior: 'smooth' }); }, 300); } } });
+  // the phone keyboard would cover the list: move only the form itself (never the whole page) so the field sits near its top
+  setTimeout(() => {
+    if (document.activeElement !== t) return;
+    let sc = t.parentElement;
+    while (sc && !(sc.scrollHeight > sc.clientHeight + 4 && /auto|scroll/.test(getComputedStyle(sc).overflowY))) sc = sc.parentElement;
+    if (!sc || sc === document.body || sc === document.documentElement) return;
+    const lb = t.previousElementSibling || t, top = lb.getBoundingClientRect().top - sc.getBoundingClientRect().top;
+    const room = (window.visualViewport ? window.visualViewport.height : window.innerHeight) - sc.getBoundingClientRect().top;
+    // already high enough for the list to fit above the keyboard: leave it where it is
+    if (top + 320 > room && top > 12) sc.scrollTop += top - 12;
+  }, 350); } } });
 document.addEventListener('focusout', ev => { const t = ev.target; if (/^(f|ie)-dq$/.test(t.id)) setTimeout(() => { const box = $('#' + t.id.split('-')[0] + '-dl'); if (box && document.activeElement !== t) box.innerHTML = ''; }, 250); });
 
 /* ---------- views ---------- */
