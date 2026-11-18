@@ -328,7 +328,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1643';
+const VERSION = '20261118-1648';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -1531,7 +1531,8 @@ function editorHtml() {
     ${body}
     ${it.typeId ? `<div class="qp"><div><span class="lbl">Брой</span><div class="qty"><button type="button" data-act="f-qty" data-v="-1" aria-label="По-малко">−</button><b>${it.qty}</b><button type="button" data-act="f-qty" data-v="1" aria-label="Повече">+</button></div></div><div class="qp-p"><label class="lbl" for="f-iprice">Цена за брой, €</label><input class="field" id="f-iprice" inputmode="decimal" value="${e(it.price)}" autocomplete="off"></div></div>
       <label class="lbl" for="f-inote">Бележка за продукта</label><input class="field" id="f-inote" value="${e(it.note)}" autocomplete="off">
-      <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>` : ''}
+      <button type="button" class="btn wide" data-act="f-add" style="margin-top:14px">Добави към поръчката</button>
+      <button type="button" class="btn ghost wide" data-act="f-icancel" style="margin-top:8px">Откажи</button>` : ''}
   </div>`;
 }
 function renderForm() {
@@ -1971,6 +1972,7 @@ document.addEventListener('click', async ev => {
     case 'f-brand': F.brand = v; return renderForm();
     case 'f-channel': F.channel = v; return renderForm();
     case 'f-account': F.account = v; return renderForm();
+    case 'f-icancel': F.edit = blankItem(); F.err = ''; return renderForm();
     case 'f-dpick': F.edit.design = v; F.edit.dq = v; setDList('f', ''); return renderForm();
     case 'f-size': F.edit.size = v; return renderForm();
     case 'f-color': F.edit.color = v; return renderForm();
