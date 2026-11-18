@@ -328,7 +328,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1637';
+const VERSION = '20261118-1643';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -1542,8 +1542,7 @@ function renderForm() {
   const prev = sheet.querySelector('.sheet');
   const keepY = prev ? prev.scrollTop : 0;
   const pick = (act, kind, cur) => `<div class="chips">${opts(kind).map(o => `<button type="button" class="chip" data-act="${act}" data-v="${e(o.value)}" aria-pressed="${cur === o.value}">${e(o.value)}</button>`).join('')}</div>`;
-  const hasTee = F.items.concat(F.edit).some(i => (typeOf(i.typeId) || {}).is_tshirt);
-  const confirm = F.confirm == null ? hasTee : F.confirm;
+  const confirm = !!F.confirm;
   sheet.innerHTML = `<div class="sheet"><div class="sheet-in">
     <div class="sheet-top"><h2>Нова поръчка</h2><button class="link" data-act="f-close">Отказ</button></div>
     <label class="lbl" for="f-customer">Клиент</label><input class="field" id="f-customer" value="${e(F.customer)}" autocomplete="off">
@@ -1558,7 +1557,6 @@ function renderForm() {
     ${F.items.map((it, i) => `<div class="draft"><span>${itemLabelHtml(it)}${parsePrice(it.price) != null ? ' · ' + e(money(parsePrice(it.price) * it.qty)) : ''}<br><span class="small muted">${e(draftStages(it).map(s => s.name).join(' → ') || 'без етапи')}</span></span><button class="link" data-act="f-rm" data-v="${i}">Махни</button></div>`).join('')}
     ${editorHtml()}
     <p class="cod" id="f-total">${e(formTotal())}</p>
-    <label class="lbl" for="f-due">Срок (по желание)</label><input class="field" id="f-due" type="date" value="${e(F.due)}">
     <label class="check"><input type="checkbox" id="f-urgent" ${F.urgent ? 'checked' : ''}>Спешна поръчка</label>
     <label class="check"><input type="checkbox" id="f-confirm" ${confirm ? 'checked' : ''}>Звъним на клиента за потвърждение</label>
     <label class="lbl" for="f-note">Бележка към поръчката</label><textarea class="field" id="f-note" rows="2">${e(F.note)}</textarea>
@@ -1591,13 +1589,12 @@ async function saveOrder() {
   if (F.edit.typeId) { const m = addDraft(); if (m) { F.err = m; return renderForm(); } }
   if (!F.items.length) { F.err = 'Добави поне един продукт.'; return renderForm(); }
   if (!F.brand || !F.channel) { F.err = 'Избери марка и канал.'; return renderForm(); }
-  const hasTee = F.items.some(i => (typeOf(i.typeId) || {}).is_tshirt);
   F.busy = true; F.err = ''; renderForm();
   try {
     await api.createOrder({
       customer: F.customer.trim(), phone: F.phone.trim(), recipient: F.recipient.trim(), address: F.address.trim(), price: '', brand: F.brand, channel: F.channel,
       account: F.brand === 'Meivi' && F.channel === 'TikTok' ? F.account : '',
-      note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: F.confirm == null ? hasTee : F.confirm,
+      note: F.note.trim(), urgent: F.urgent, due: F.due, needs_confirm: !!F.confirm,
       items: F.items.map(it => ({
         product_type_id: it.typeId === 'custom' ? '' : it.typeId, name: it.name.trim(),
         is_tshirt: !!(typeOf(it.typeId) || {}).is_tshirt, size: it.size, color: it.color, qty: it.qty,
