@@ -130,6 +130,7 @@ table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .card-top .num,.card-top .src{color:var(--on-band);opacity:.72}
 .card-top .badge{background:none;color:var(--on-band);box-shadow:inset 0 0 0 1.5px var(--on-band)}
 .card-top .badge.urgent,.card-top .badge.late{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.card-top .badge.paid{background:#2E9A55;color:#fff;box-shadow:none}
 .card-top .badge.photo-req{background:#f2c94c;color:#1b1b1b;box-shadow:none}
 .notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
 .notice{background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.35);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
@@ -355,7 +356,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-2046';
+const VERSION = '20261118-2048';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -605,7 +606,7 @@ function cardHtml(o) {
   const src = [o.brand, o.channel, o.account].filter(Boolean).join(' · ') + (o.shop_name ? ' ' + o.shop_name : '');
   const badges = [
     o.cancelled_at ? '<span class="badge urgent">Отказана в сайта</span>' : '',
-    o.paid || o.paid_manual ? '<span class="badge">Платена</span>' : '',
+    o.paid || o.paid_manual ? '<span class="badge paid">Платена</span>' : '',
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
     o.photo_req && !o.waybill_at ? '<span class="badge photo-req">📷 Заявена за снимане</span>' : '',
