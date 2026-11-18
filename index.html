@@ -95,6 +95,11 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 .card-top .num,.card-top .src{color:var(--on-band);opacity:.72}
 .card-top .badge{background:none;color:var(--on-band);box-shadow:inset 0 0 0 1.5px var(--on-band)}
 .card-top .badge.urgent,.card-top .badge.late{background:var(--accent);color:var(--on-accent);box-shadow:none}
+.card-top .badge.nosize{background:#e8a317;color:#1b1b1b;box-shadow:none}
+.nosize-btn{display:flex;justify-content:space-between;align-items:center;width:100%;margin:0 0 12px;padding:11px 14px;border-radius:12px;border:2px dashed #e8a317;background:none;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer}
+.nosize-btn span{color:var(--muted);font-weight:600;font-size:13px}
+.miss-row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.miss-row:last-child{border-bottom:0}
 .card-top .badge.bad{background:var(--on-band);color:var(--band);box-shadow:none}
 .prod{padding:10px 14px;border-top:1px solid var(--line)}
 .card-top + .prod{border-top:0}
@@ -302,7 +307,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-1007';
+const VERSION = '20261118-1020';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -503,6 +508,7 @@ function cardHtml(o) {
   const badges = [
     o.urgent ? '<span class="badge urgent">Спешна</span>' : '',
     isLate(o) ? `<span class="badge late">Закъснява · ${e(day(o.due))}</span>` : (o.due && !o.waybill_at ? `<span class="badge">до ${e(day(o.due))}</span>` : ''),
+    ...sizeWaitItems(o).map(it => `<span class="badge nosize">⚠ Няма размер ${e([it.size, it.color].filter(Boolean).join(' '))}</span>`),
     o.problem ? `<span class="badge bad">Проблем: ${e(o.problem)}</span>` : '',
     notesOf(o.id).length ? `<span class="badge">Бележки: ${notesOf(o.id).length}</span>` : ''
   ].join('');
@@ -736,8 +742,15 @@ function renderPop() {
 // Products can be grouped (all t-shirt models sit under "Тениски")
 const typeOfItem = it => D.types.find(t => t.id === it.product_type_id) || D.types.find(t => t.name === it.name);
 const groupOf = it => { const t = typeOfItem(it); return (t && t.grp) || it.name; };
+// Missing sizes: stored as options of kind "missing", value "typeId|size|colour" (empty colour = every colour)
+const missingList = () => opts('missing').map(o => { const [typeId, size, color] = o.value.split('|'); return { id: o.id, typeId, size, color: color || '' }; });
+const missingFor = it => { const t = typeOfItem(it); return t && missingList().find(m => m.typeId === t.id && m.size === it.size && (!m.color || m.color === it.color)); };
+// an order waits for a size while a product that is not yet made uses a missing size
+const sizeWaitItems = o => o.packed_at || o.waybill_at ? [] : itemsOf(o).filter(it => itemState(it).code !== 'ready' && missingFor(it));
+const waitsSize = o => sizeWaitItems(o).length > 0;
+const missingLabel = m => { const t = D.types.find(x => x.id === m.typeId); return [t ? t.name : '?', m.size, m.color || 'всички цветове'].join(' · '); };
 function filterData() {
-  const everything = activeOrders().filter(o => !o.packed_at);
+  const everything = activeOrders().filter(o => !o.packed_at && !waitsSize(o));
   // store filter first; everything below is counted within the chosen store
   const brandCounts = {};
   everything.forEach(o => { if (o.brand) brandCounts[o.brand] = (brandCounts[o.brand] || 0) + 1; });
@@ -856,6 +869,14 @@ function updateResults() {
 }
 
 function viewOrders() {
+  const waiting = activeOrders().filter(waitsSize);
+  if (UI.noSize) {
+    if (!waiting.length) UI.noSize = false;
+    else return `<button class="link back" data-act="nosize" data-v="">← Поръчки</button>
+      <div class="top"><h1>Чакат размер <span class="h-n">(${waiting.length})</span></h1><button class="fbtn" data-act="tab" data-v="missing">Липсващи</button></div>
+      <p class="small muted" style="margin-bottom:10px">Връщат се в списъка сами, когато махнеш размера от „Липсващи размери“.</p>
+      ${waiting.map(cardHtml).join('')}`;
+  }
   const f = filterData();
   const active = activeFilters().length;
   const searching = UI.searching && UI.q.trim();
@@ -864,6 +885,7 @@ function viewOrders() {
       <button class="fbtn ${active ? 'on' : ''}" data-act="filters">Филтри${active ? ` (${active})` : ''}</button></span></div>
     ${UI.searching ? `<div class="search"><input class="field" id="q" type="search" value="${e(UI.q)}" placeholder="Име, телефон, адрес, номер, продукт…" autocomplete="off" enterkeyhint="search"><button class="link" data-act="search-x">Затвори</button></div>` : ''}
     <div id="olist">${searching ? resultsHtml() : `
+    ${waiting.length ? `<button class="nosize-btn" data-act="nosize" data-v="1">⚠ Чакат размер (${waiting.length})<span>Виж ›</span></button>` : ''}
     ${active ? `<div class="pills on-list">${pills()}<span class="fnow-n">${f.shown.length} от ${f.everything.length}</span></div>` : ''}
     ${f.shown.length ? f.shown.map(cardHtml).join('') : `<p class="empty">${f.everything.length ? 'Няма поръчки за този избор.' : 'Още няма поръчки. Натисни „Нова поръчка“, за да въведеш първата.'}</p>`}`}</div>`;
 }
@@ -916,6 +938,30 @@ function viewDone() {
     ${toSend.length ? toSend.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px 24px">Няма опаковани поръчки за изпращане.</p>'}
     <h2 class="sec">Завършени · последните 30 дни <span class="h-n">(${sent.length})</span></h2>
     ${sent.length ? sent.map(cardHtml).join('') : '<p class="empty" style="padding:14px 8px">Още няма завършени поръчки.</p>'}`;
+}
+
+function viewMissing() {
+  const M = UI.miss || (UI.miss = { typeId: '', size: '', color: '' });
+  const types = D.types.filter(t => (t.sizes || []).length);
+  if (!types.some(t => t.id === M.typeId)) M.typeId = types.length ? types[0].id : '';
+  const t = types.find(x => x.id === M.typeId);
+  if (t && !t.sizes.includes(M.size)) M.size = t.sizes[0] || '';
+  if (t && M.color && !(t.colors || []).includes(M.color)) M.color = '';
+  const count = m => activeOrders().filter(o => sizeWaitItems(o).some(it => missingFor(it) && missingFor(it).id === m.id)).length;
+  const list = missingList();
+  return `<button class="link back" data-act="tab" data-v="profile">← Профил</button>
+    <div class="top"><h1>Липсващи размери</h1></div>
+    <section class="block">
+      <label class="lbl" for="ms-type">Вид</label><select class="field" id="ms-type">${types.map(x => `<option value="${x.id}" ${x.id === M.typeId ? 'selected' : ''}>${e(x.name)}</option>`).join('')}</select>
+      <div class="actions" style="margin-top:0">
+        <div style="flex:1"><label class="lbl" for="ms-size">Размер</label><select class="field" id="ms-size">${(t ? t.sizes : []).map(x => `<option ${x === M.size ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
+        <div style="flex:1"><label class="lbl" for="ms-color">Цвят</label><select class="field" id="ms-color"><option value="" ${!M.color ? 'selected' : ''}>Всички</option>${(t ? t.colors || [] : []).map(x => `<option ${x === M.color ? 'selected' : ''}>${e(x)}</option>`).join('')}</select></div>
+      </div>
+      <button class="btn wide" data-act="miss-add" style="margin-top:10px">Добави като липсващ</button>
+    </section>
+    <section class="block"><h2><span>Липсват сега</span></h2>
+      ${list.length ? list.map(m => { const n = count(m); return `<div class="miss-row"><span><b>${e(missingLabel(m))}</b><br><span class="small muted">${n ? `${n} ${n === 1 ? 'поръчка чака' : 'поръчки чакат'}` : 'няма чакащи поръчки'}</span></span><button class="btn ghost" data-act="miss-del" data-id="${m.id}">Заредихме</button></div>`; }).join('') : '<p class="empty" style="margin:8px 0 0">Няма липсващи размери.</p>'}
+    </section>`;
 }
 
 function viewSettings() {
@@ -1266,7 +1312,8 @@ function tasksOf(uid) {
 
 function viewProfile() {
   const admin = isAdmin();
-  const settingsBtn = `${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
+  const missN = missingList().length;
+  const settingsBtn = `<button class="btn wide" data-act="tab" data-v="missing" style="margin-top:8px">Липсващи размери${missN ? ` (${missN})` : ''}</button>${themeRow()}<button class="btn ghost wide" data-act="tab" data-v="settings" style="margin-top:6px">Настройки</button>`;
   if (admin && !UI.person) {
     const people = D.members.slice().sort((a, b) => (b.user_id === me.id) - (a.user_id === me.id) || a.name.localeCompare(b.name));
     const rows = people.map(m => {
@@ -1355,8 +1402,8 @@ function render() {
   const app = $('#app');
   if (!me) { app.innerHTML = viewAuth(); UI.open = null; $('#pop').innerHTML = ''; lockPage(); return; }
   if (['stats', 'work', 'leave'].includes(UI.tab) && !isAdmin()) UI.tab = 'profile';
-  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
-  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
+  const view = { orders: viewOrders, summary: viewSummary, done: viewDone, profile: viewProfile, settings: viewSettings, missing: viewMissing, stats: viewStats, work: viewWork, leave: viewLeave }[UI.tab]();
+  const tab = (v, l) => `<button class="tab" data-act="tab" data-v="${v}" ${UI.tab === v || (v === 'profile' && ['settings', 'stats', 'work', 'leave', 'missing'].includes(UI.tab)) ? 'aria-current="page"' : ''}>${l}</button>`;
   const mine = myOpenCount();
   app.innerHTML = `<nav class="bar"><div class="bar-in">${tab('orders', 'Поръчки')}${tab('summary', 'За правене')}${tab('done', 'Готови')}${tab('profile', `Профил${mine ? `<span class="tbadge">${mine}</span>` : ''}`)}</div></nav>
     <main class="wrap">${view}</main>
@@ -1809,6 +1856,15 @@ document.addEventListener('click', async ev => {
       return act(() => api.insert('options', { kind: v, value: val, sort: opts(v).length + 1 }), { config: true });
     }
     case 'opt-del': return act(() => api.remove('options', id), { config: true });
+    case 'nosize': UI.noSize = !!v; render(); return window.scrollTo(0, 0);
+    case 'miss-add': {
+      const M = UI.miss; if (!M || !M.typeId || !M.size) return;
+      const val = [M.typeId, M.size, M.color].join('|');
+      if (opts('missing').some(o => o.value === val)) return toast('Вече е в списъка.');
+      toast('Добавено · поръчките с този размер отиват в „Чакат размер“');
+      return act(() => api.insert('options', { kind: 'missing', value: val, sort: opts('missing').length + 1 }), { config: true });
+    }
+    case 'miss-del': toast('Махнато · поръчките се връщат в списъка'); return act(() => api.remove('options', id), { config: true });
     /* form */
     case 'f-close': F = null; return renderForm();
     case 'f-brand': F.brand = v; return renderForm();
@@ -1875,6 +1931,7 @@ document.addEventListener('input', ev => {
 });
 document.addEventListener('change', ev => {
   const t = ev.target;
+  if (UI.tab === 'missing' && /^ms-/.test(t.id)) { const k = { 'ms-type': 'typeId', 'ms-size': 'size', 'ms-color': 'color' }[t.id]; UI.miss[k] = t.value; return render(); }
   if (UI.leaveEdit && t.id === 'lv-user') { UI.leaveEdit.draft.user_id = t.value; return renderPop(); }
   if (UI.leaveEdit && (t.id === 'lv-start' || t.id === 'lv-end')) return renderPop();
   if (t.id === 'al-days' || t.id === 'al-carried') return saveAllowance(t.dataset.uid, t.id === 'al-days' ? 'days' : 'carried', t.value);
