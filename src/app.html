@@ -134,6 +134,8 @@ table.stock-in .field{min-height:40px;padding:0 4px;text-align:center}
 .notice-ov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:24px}
 .notice{background:var(--surface);box-shadow:0 10px 40px rgba(0,0,0,.35);color:var(--ink);border-radius:18px;padding:26px 22px 20px;max-width:360px;width:100%;text-align:center;border:3px dashed #e0a800}
 .notice .ico{font-size:44px;line-height:1}
+.ask-box{background:var(--surface);color:var(--ink);border-radius:16px;padding:18px 16px 16px;max-width:340px;width:100%;display:flex;flex-direction:column;gap:10px;box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.ask-box h2{margin:0 0 4px;font-size:18px;text-align:center}
 .notice h2{font-size:24px;margin:10px 0 6px}
 .notice p{margin:0 0 18px;color:var(--soft)}
 td.miss{background:#f6c445;color:#1b1b1b;border-radius:6px;white-space:nowrap}
@@ -760,9 +762,7 @@ function bodyHtml(o) {
     <div class="actions">
       <button class="btn ghost" data-act="task-new" data-order="${o.id}">+ Задача</button>
       ${o.waybill_at ? '' : `<button class="btn ghost" data-act="photo-req" data-id="${o.id}">${o.photo_req ? 'Махни заявката за снимане' : '📷 Заяви за снимане'}</button>`}
-      ${o.paid || o.paid_manual ? '' : UI.armed === 'pay:' + o.id
-        ? `<button class="btn ghost" data-act="paid" data-v="order" data-id="${o.id}">Само поръчката</button><button class="btn ghost" data-act="paid" data-v="all" data-id="${o.id}">Поръчката и доставката</button>`
-        : `<button class="btn ghost" data-act="paid" data-id="${o.id}">Платена</button>`}
+      ${o.paid || o.paid_manual ? '' : `<button class="btn ghost" data-act="paid" data-id="${o.id}">Платена</button>`}
       <button class="btn ghost" data-act="urgent" data-id="${o.id}">${o.urgent ? 'Махни „спешна“' : 'Отбележи като спешна'}</button>
       <button class="btn danger" data-act="delete" data-id="${o.id}">${armed ? 'Натисни пак, за да изтриеш' : 'Изтрий поръчката'}</button>
     </div>
@@ -2045,7 +2045,7 @@ document.addEventListener('click', async ev => {
   const b = ev.target.closest('[data-act]');
   if (!b) return;
   const a = b.dataset.act, id = b.dataset.id, v = b.dataset.v;
-  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del' && a !== 'paid') UI.armed = null;
+  if (a !== 'delete' && a !== 'task-del' && a !== 'ie-del' && a !== 'lv-del' && a !== 'stock-undo' && a !== 'ret-del' && a !== 'mat-undo' && a !== 'mat-del') UI.armed = null;
   const undo = !!b.dataset.undo;
   if (undo) { clearTimeout(toastTimer); $('#toast').innerHTML = ''; }
   switch (a) {
@@ -2239,9 +2239,17 @@ document.addEventListener('click', async ev => {
     case 'photo-req': { const o = findOrder(id); toast(o.photo_req ? 'Заявката за снимане е махната' : 'Заявена за снимане · ще се изпрати, щом е готова'); return act(() => api.update('orders', id, { photo_req: !o.photo_req })); }
     case 'notice-ok': { const n = document.getElementById('notice'); if (n) n.remove(); return; }
     case 'paid':
-      if (v == null && UI.armed !== 'pay:' + id) { UI.armed = 'pay:' + id; return render(); }
-      UI.armed = null;
+      if (v == null) {
+        const ov = document.createElement('div'); ov.id = 'pay-ask'; ov.className = 'notice-ov'; ov.dataset.act = 'paid-x';
+        ov.innerHTML = `<div class="ask-box"><h2>Платена</h2>
+          <button class="btn" data-act="paid" data-v="order" data-id="${id}">Само поръчката</button>
+          <button class="btn" data-act="paid" data-v="all" data-id="${id}">Поръчката и доставката</button>
+          <button class="btn ghost" data-act="paid-x">Откажи</button></div>`;
+        return document.body.appendChild(ov);
+      }
+      { const ov = document.getElementById('pay-ask'); if (ov) ov.remove(); }
       return act(() => api.update('orders', id, { paid_manual: v || null }));
+    case 'paid-x': { const ov = document.getElementById('pay-ask'); if (ov) ov.remove(); return; }
     case 'urgent': return act(() => api.update('orders', id, { urgent: !findOrder(id).urgent }));
     case 'delete':
       if (UI.armed !== id) { UI.armed = id; return render(); }
