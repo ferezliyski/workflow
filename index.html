@@ -92,9 +92,16 @@ label.lbl,.lbl{display:block;margin:14px 0 6px;font-size:13px;font-weight:700;co
 @media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .ret{color:#4cc27f}}
 .ret-btn{margin:8px 0 4px;background:#1f8a4c;color:#fff;min-height:40px;font-size:14px}
 table.stock td{padding:5px 4px;font-size:13px}
-table.stock tr.col td{padding-top:12px;text-align:left;font-weight:800;border-bottom:0}
+table.stock tr.gap td{padding:0;height:12px;border:0}
+table.stock tr.col td{padding:7px 10px;text-align:left;font-weight:800;font-size:14px;letter-spacing:.02em;border:0;border-radius:8px;background:#e4e0d9;color:#1b1b1b}
+table.stock tr.col.c-dark td{background:#1b1b1b;color:#fff}
+table.stock tr.col.c-light td{background:#fff;color:#1b1b1b;box-shadow:inset 0 0 0 2px #1b1b1b}
+:root[data-theme="dark"] table.stock tr.col.c-dark td{box-shadow:inset 0 0 0 2px #fff}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) table.stock tr.col.c-dark td{box-shadow:inset 0 0 0 2px #fff}}
 table.stock tr.ord td{color:var(--soft)}
-table.stock tr.after td:first-child{font-weight:800}
+table.stock tr.after td{background:rgba(127,127,127,.2);font-weight:800;font-size:15px;border-bottom:0}
+table.stock tr.after td:first-child{border-radius:8px 0 0 8px}
+table.stock tr.after td:last-child{border-radius:0 8px 8px 0}
 table.stock td.low{background:#f6c445;color:#1b1b1b;font-weight:800;border-radius:6px}
 table.stock td.neg{background:var(--accent);color:var(--on-accent);font-weight:800;border-radius:6px}
 table.stock-in td{padding:4px 2px}
@@ -359,7 +366,7 @@ Resources:`;for(let t of c){if(!t||typeof t!=`string`)throw Error(`@supabase/aut
 <script>
 (() => {
 'use strict';
-const VERSION = '20261118-2145';
+const VERSION = '20261119-1037';
 const CFG = { url: 'https://aetwuxgetazirjnacnuu.supabase.co', key: 'sb_publishable_7LspzoCAPZagpM-x9LR1Pw_Qu5ASU3k' };
 
 /* ---------- data layer ---------- */
@@ -1134,10 +1141,11 @@ function viewStock() {
   const blocks = tees.map(t => {
     const counted = stockCounted(t.id);
     const have = t.sizes.reduce((a, sz) => a + t.colors.reduce((b, c) => b + stockQty(t.id, sz, c), 0), 0);
-    const rows = t.colors.map(c => {
+    const rows = t.colors.map((c, ci) => {
       const cells = t.sizes.map(sz => { const h = stockQty(t.id, sz, c), o = ordered[stockKey(t.id, sz, c)] || 0; return { h, o, a: h - o }; });
       const line = (lbl, f, cls) => `<tr class="${cls}"><td>${lbl}</td>${cells.map(x => { const v = f(x); return `<td class="${cls === 'after' ? (v < 0 ? 'neg' : v < 5 && counted ? 'low' : 'v') : v ? 'v' : 'z'}">${v || (cls === 'after' ? '0' : '·')}</td>`; }).join('')}</tr>`;
-      return `<tr class="col"><td colspan="${t.sizes.length + 1}">${e(c)}</td></tr>${line('Налични', x => x.h, 'have')}${line('Поръчани', x => x.o, 'ord')}${line('След', x => x.a, 'after')}`;
+      const tone = /^черн/i.test(c) ? ' c-dark' : /^бял|^бяло/i.test(c) ? ' c-light' : '';
+      return `${ci ? `<tr class="gap"><td colspan="${t.sizes.length + 1}"></td></tr>` : ''}<tr class="col${tone}"><td colspan="${t.sizes.length + 1}">${e(c)}</td></tr>${line('Налични', x => x.h, 'have')}${line('Поръчани', x => x.o, 'ord')}${line('След', x => x.a, 'after')}`;
     }).join('');
     return `<section class="block"><h2><span>${e(t.name)}</span><span>${have} бр.</span></h2>
       <div class="tbl-wrap"><table class="stock"><thead><tr><th><button class="inv" data-act="stock-open" data-v="count" data-id="${t.id}">Инвентаризация</button></th>${t.sizes.map(sz => `<th>${e(sz)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div></section>`;
